@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import "./globals.css";
 
@@ -22,6 +23,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} font-sans antialiased bg-slate-950 text-slate-100`}>
+        <Analytics />
         <ErrorBoundary>{children}</ErrorBoundary>
       </body>
     </html>
