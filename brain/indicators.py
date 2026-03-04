@@ -1,7 +1,11 @@
 """Compute technical indicators and detect signal conditions."""
 
+import numpy as np
 import pandas as pd
 import ta
+from config import INDICATOR_PARAMS
+
+CONFLUENCE_LOOKBACK = 5
 
 
 def compute_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -10,267 +14,200 @@ def compute_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     high = df["high"]
     low = df["low"]
 
-    # RSI (14-period)
-    df["rsi"] = ta.momentum.rsi(close, window=14)
+    # RSI
+    df["rsi"] = ta.momentum.rsi(close, window=INDICATOR_PARAMS["rsi_window"])
 
-    # Bollinger Bands (20-period, 2 std)
-    bb = ta.volatility.BollingerBands(close, window=20, window_dev=2)
+    # Bollinger Bands
+    bb = ta.volatility.BollingerBands(
+        close,
+        window=INDICATOR_PARAMS["bb_window"],
+        window_dev=INDICATOR_PARAMS["bb_std"],
+    )
     df["bb_upper"] = bb.bollinger_hband()
     df["bb_middle"] = bb.bollinger_mavg()
     df["bb_lower"] = bb.bollinger_lband()
 
-    # MACD (12, 26, 9)
-    macd_ind = ta.trend.MACD(close, window_fast=12, window_slow=26, window_sign=9)
+    # MACD
+    macd_ind = ta.trend.MACD(
+        close,
+        window_fast=INDICATOR_PARAMS["macd_fast"],
+        window_slow=INDICATOR_PARAMS["macd_slow"],
+        window_sign=INDICATOR_PARAMS["macd_signal"],
+    )
     df["macd_line"] = macd_ind.macd()
     df["macd_signal"] = macd_ind.macd_signal()
     df["macd_histogram"] = macd_ind.macd_diff()
 
-    # Moving Average Crossover (SMA 20 vs SMA 50)
-    df["sma_20"] = ta.trend.sma_indicator(close, window=20)
-    df["sma_50"] = ta.trend.sma_indicator(close, window=50)
+    # Moving Average Crossover
+    df["sma_20"] = ta.trend.sma_indicator(close, window=INDICATOR_PARAMS["sma_short"])
+    df["sma_50"] = ta.trend.sma_indicator(close, window=INDICATOR_PARAMS["sma_long"])
 
-    # Stochastic Oscillator (14, 3)
-    stoch = ta.momentum.StochasticOscillator(high, low, close, window=14, smooth_window=3)
+    # Stochastic Oscillator
+    stoch = ta.momentum.StochasticOscillator(
+        high, low, close,
+        window=INDICATOR_PARAMS["stoch_window"],
+        smooth_window=INDICATOR_PARAMS["stoch_smooth"],
+    )
     df["stoch_k"] = stoch.stoch()
     df["stoch_d"] = stoch.stoch_signal()
 
     return df
 
 
+# ============================================================
+# Simple threshold detectors (vectorized)
+# ============================================================
+
 def detect_rsi_buy(df: pd.DataFrame, threshold: float) -> list[int]:
     """Find indices where RSI dips below threshold (buy signal)."""
-    hits = []
     rsi = df["rsi"]
-    for i in range(len(df)):
-        if pd.notna(rsi.iloc[i]) and rsi.iloc[i] < threshold:
-            hits.append(i)
-    return hits
+    mask = rsi.notna() & (rsi < threshold)
+    return mask[mask].index.tolist()
 
 
 def detect_rsi_sell(df: pd.DataFrame, threshold: float) -> list[int]:
     """Find indices where RSI rises above threshold (sell signal)."""
-    hits = []
     rsi = df["rsi"]
-    for i in range(len(df)):
-        if pd.notna(rsi.iloc[i]) and rsi.iloc[i] > threshold:
-            hits.append(i)
-    return hits
+    mask = rsi.notna() & (rsi > threshold)
+    return mask[mask].index.tolist()
 
 
 def detect_rsi_neutral(df: pd.DataFrame, low: float, high: float) -> list[int]:
     """Find indices where RSI is in the neutral zone."""
-    hits = []
     rsi = df["rsi"]
-    for i in range(len(df)):
-        if pd.notna(rsi.iloc[i]) and low <= rsi.iloc[i] <= high:
-            hits.append(i)
-    return hits
+    mask = rsi.notna() & (rsi >= low) & (rsi <= high)
+    return mask[mask].index.tolist()
 
 
 def detect_bollinger_buy(df: pd.DataFrame, touch_pct: float) -> list[int]:
     """Find indices where price touches or drops below lower Bollinger Band."""
-    hits = []
-    for i in range(len(df)):
-        if pd.notna(df["bb_lower"].iloc[i]):
-            lower = df["bb_lower"].iloc[i]
-            close = df["close"].iloc[i]
-            if close <= lower * (1 + touch_pct):
-                hits.append(i)
-    return hits
-
-
-def detect_bollinger_neutral(df: pd.DataFrame) -> list[int]:
-    """Find indices where price is near the middle Bollinger Band."""
-    hits = []
-    for i in range(len(df)):
-        if pd.notna(df["bb_middle"].iloc[i]) and pd.notna(df["bb_upper"].iloc[i]):
-            mid = df["bb_middle"].iloc[i]
-            upper = df["bb_upper"].iloc[i]
-            lower = df["bb_lower"].iloc[i]
-            close = df["close"].iloc[i]
-            band_width = upper - lower
-            if band_width > 0 and abs(close - mid) / band_width < 0.15:
-                hits.append(i)
-    return hits
-
-
-def detect_macd_buy(df: pd.DataFrame) -> list[int]:
-    """Find indices where MACD crosses above signal line (bullish crossover)."""
-    hits = []
-    macd = df["macd_line"]
-    signal = df["macd_signal"]
-    for i in range(1, len(df)):
-        if (pd.notna(macd.iloc[i]) and pd.notna(signal.iloc[i]) and
-            pd.notna(macd.iloc[i-1]) and pd.notna(signal.iloc[i-1])):
-            if macd.iloc[i-1] <= signal.iloc[i-1] and macd.iloc[i] > signal.iloc[i]:
-                hits.append(i)
-    return hits
-
-
-def detect_macd_neutral(df: pd.DataFrame) -> list[int]:
-    """Find indices where MACD and signal are close together with small histogram."""
-    hits = []
-    hist = df["macd_histogram"]
-    close = df["close"]
-    for i in range(len(df)):
-        if pd.notna(hist.iloc[i]) and pd.notna(close.iloc[i]):
-            # Histogram less than 0.2% of price = basically flat
-            if abs(hist.iloc[i]) < close.iloc[i] * 0.002:
-                hits.append(i)
-    return hits
-
-
-def detect_ma_crossover_buy(df: pd.DataFrame) -> list[int]:
-    """Find indices where SMA 20 crosses above SMA 50 (golden cross)."""
-    hits = []
-    short = df["sma_20"]
-    long = df["sma_50"]
-    for i in range(1, len(df)):
-        if (pd.notna(short.iloc[i]) and pd.notna(long.iloc[i]) and
-            pd.notna(short.iloc[i-1]) and pd.notna(long.iloc[i-1])):
-            if short.iloc[i-1] <= long.iloc[i-1] and short.iloc[i] > long.iloc[i]:
-                hits.append(i)
-    return hits
-
-
-def detect_ma_crossover_neutral(df: pd.DataFrame) -> list[int]:
-    """Find indices where both MAs are close and roughly parallel."""
-    hits = []
-    short = df["sma_20"]
-    long = df["sma_50"]
-    close = df["close"]
-    for i in range(len(df)):
-        if pd.notna(short.iloc[i]) and pd.notna(long.iloc[i]):
-            gap = abs(short.iloc[i] - long.iloc[i])
-            if gap < close.iloc[i] * 0.005:  # Within 0.5% of each other
-                hits.append(i)
-    return hits
-
-
-def detect_stochastic_buy(df: pd.DataFrame, threshold: float) -> list[int]:
-    """Find indices where Stochastic %K crosses above %D in oversold zone."""
-    hits = []
-    k = df["stoch_k"]
-    d = df["stoch_d"]
-    for i in range(1, len(df)):
-        if (pd.notna(k.iloc[i]) and pd.notna(d.iloc[i]) and
-            pd.notna(k.iloc[i-1]) and pd.notna(d.iloc[i-1])):
-            if k.iloc[i] < threshold and k.iloc[i-1] <= d.iloc[i-1] and k.iloc[i] > d.iloc[i]:
-                hits.append(i)
-    return hits
-
-
-def detect_stochastic_neutral(df: pd.DataFrame) -> list[int]:
-    """Find indices where Stochastic is in the middle zone (30-70)."""
-    hits = []
-    k = df["stoch_k"]
-    for i in range(len(df)):
-        if pd.notna(k.iloc[i]) and 30 <= k.iloc[i] <= 70:
-            hits.append(i)
-    return hits
+    mask = df["bb_lower"].notna() & (df["close"] <= df["bb_lower"] * (1 + touch_pct))
+    return mask[mask].index.tolist()
 
 
 def detect_bollinger_sell(df: pd.DataFrame, touch_pct: float) -> list[int]:
     """Find indices where price touches or rises above upper Bollinger Band."""
-    hits = []
-    for i in range(len(df)):
-        if pd.notna(df["bb_upper"].iloc[i]):
-            upper = df["bb_upper"].iloc[i]
-            close = df["close"].iloc[i]
-            if close >= upper * (1 - touch_pct):
-                hits.append(i)
-    return hits
+    mask = df["bb_upper"].notna() & (df["close"] >= df["bb_upper"] * (1 - touch_pct))
+    return mask[mask].index.tolist()
+
+
+def detect_bollinger_neutral(df: pd.DataFrame) -> list[int]:
+    """Find indices where price is near the middle Bollinger Band."""
+    valid = df["bb_middle"].notna() & df["bb_upper"].notna() & df["bb_lower"].notna()
+    band_width = df["bb_upper"] - df["bb_lower"]
+    distance = (df["close"] - df["bb_middle"]).abs()
+    mask = valid & (band_width > 0) & (distance / band_width < 0.15)
+    return mask[mask].index.tolist()
+
+
+def detect_stochastic_neutral(df: pd.DataFrame) -> list[int]:
+    """Find indices where Stochastic is in the middle zone (30-70)."""
+    k = df["stoch_k"]
+    mask = k.notna() & (k >= 30) & (k <= 70)
+    return mask[mask].index.tolist()
+
+
+def detect_macd_neutral(df: pd.DataFrame) -> list[int]:
+    """Find indices where MACD and signal are close together with small histogram."""
+    hist = df["macd_histogram"]
+    close = df["close"]
+    mask = hist.notna() & close.notna() & (hist.abs() < close * 0.002)
+    return mask[mask].index.tolist()
+
+
+def detect_ma_crossover_neutral(df: pd.DataFrame) -> list[int]:
+    """Find indices where both MAs are close and roughly parallel."""
+    short = df["sma_20"]
+    long = df["sma_50"]
+    valid = short.notna() & long.notna()
+    gap = (short - long).abs()
+    mask = valid & (gap < df["close"] * 0.005)
+    return mask[mask].index.tolist()
+
+
+# ============================================================
+# Crossover detectors (vectorized with shift)
+# ============================================================
+
+def _detect_crossover_above(series_a: pd.Series, series_b: pd.Series) -> list[int]:
+    """Find indices where series_a crosses above series_b."""
+    valid = series_a.notna() & series_b.notna() & series_a.shift(1).notna() & series_b.shift(1).notna()
+    crossed = valid & (series_a.shift(1) <= series_b.shift(1)) & (series_a > series_b)
+    return crossed[crossed].index.tolist()
+
+
+def _detect_crossover_below(series_a: pd.Series, series_b: pd.Series) -> list[int]:
+    """Find indices where series_a crosses below series_b."""
+    valid = series_a.notna() & series_b.notna() & series_a.shift(1).notna() & series_b.shift(1).notna()
+    crossed = valid & (series_a.shift(1) >= series_b.shift(1)) & (series_a < series_b)
+    return crossed[crossed].index.tolist()
+
+
+def detect_macd_buy(df: pd.DataFrame) -> list[int]:
+    """Find indices where MACD crosses above signal line (bullish crossover)."""
+    return _detect_crossover_above(df["macd_line"], df["macd_signal"])
 
 
 def detect_macd_sell(df: pd.DataFrame) -> list[int]:
     """Find indices where MACD crosses below signal line (bearish crossover)."""
-    hits = []
-    macd = df["macd_line"]
-    signal = df["macd_signal"]
-    for i in range(1, len(df)):
-        if (pd.notna(macd.iloc[i]) and pd.notna(signal.iloc[i]) and
-            pd.notna(macd.iloc[i-1]) and pd.notna(signal.iloc[i-1])):
-            if macd.iloc[i-1] >= signal.iloc[i-1] and macd.iloc[i] < signal.iloc[i]:
-                hits.append(i)
-    return hits
+    return _detect_crossover_below(df["macd_line"], df["macd_signal"])
+
+
+def detect_ma_crossover_buy(df: pd.DataFrame) -> list[int]:
+    """Find indices where SMA 20 crosses above SMA 50 (golden cross)."""
+    return _detect_crossover_above(df["sma_20"], df["sma_50"])
 
 
 def detect_ma_crossover_sell(df: pd.DataFrame) -> list[int]:
     """Find indices where SMA 20 crosses below SMA 50 (death cross)."""
-    hits = []
-    short = df["sma_20"]
-    long = df["sma_50"]
-    for i in range(1, len(df)):
-        if (pd.notna(short.iloc[i]) and pd.notna(long.iloc[i]) and
-            pd.notna(short.iloc[i-1]) and pd.notna(long.iloc[i-1])):
-            if short.iloc[i-1] >= long.iloc[i-1] and short.iloc[i] < long.iloc[i]:
-                hits.append(i)
-    return hits
+    return _detect_crossover_below(df["sma_20"], df["sma_50"])
+
+
+def detect_stochastic_buy(df: pd.DataFrame, threshold: float) -> list[int]:
+    """Find indices where Stochastic %K crosses above %D in oversold zone."""
+    k, d = df["stoch_k"], df["stoch_d"]
+    valid = k.notna() & d.notna() & k.shift(1).notna() & d.shift(1).notna()
+    crossed = valid & (k < threshold) & (k.shift(1) <= d.shift(1)) & (k > d)
+    return crossed[crossed].index.tolist()
 
 
 def detect_stochastic_sell(df: pd.DataFrame, threshold: float) -> list[int]:
     """Find indices where Stochastic %K crosses below %D in overbought zone."""
-    hits = []
-    k = df["stoch_k"]
-    d = df["stoch_d"]
-    for i in range(1, len(df)):
-        if (pd.notna(k.iloc[i]) and pd.notna(d.iloc[i]) and
-            pd.notna(k.iloc[i-1]) and pd.notna(d.iloc[i-1])):
-            if k.iloc[i] > threshold and k.iloc[i-1] >= d.iloc[i-1] and k.iloc[i] < d.iloc[i]:
-                hits.append(i)
-    return hits
+    k, d = df["stoch_k"], df["stoch_d"]
+    valid = k.notna() & d.notna() & k.shift(1).notna() & d.shift(1).notna()
+    crossed = valid & (k > threshold) & (k.shift(1) >= d.shift(1)) & (k < d)
+    return crossed[crossed].index.tolist()
 
+
+# ============================================================
+# Confluence detectors (vectorized with rolling)
+# ============================================================
 
 def detect_confluence_buy(df: pd.DataFrame, rsi_threshold: float) -> list[int]:
-    """Find indices where RSI was recently oversold AND MACD histogram is positive/rising."""
-    hits = []
+    """Find indices where RSI was recently oversold AND MACD histogram is positive."""
     rsi = df["rsi"]
     hist = df["macd_histogram"]
-    lookback = 5  # RSI was oversold within last 5 bars
-    for i in range(lookback, len(df)):
-        if pd.notna(hist.iloc[i]) and hist.iloc[i] > 0:
-            # Check if RSI was below threshold recently
-            rsi_oversold = False
-            for j in range(max(0, i - lookback), i + 1):
-                if pd.notna(rsi.iloc[j]) and rsi.iloc[j] < rsi_threshold:
-                    rsi_oversold = True
-                    break
-            if rsi_oversold:
-                hits.append(i)
-    return hits
+    # Check if RSI was below threshold in rolling window
+    rsi_was_oversold = (rsi < rsi_threshold).rolling(window=CONFLUENCE_LOOKBACK + 1, min_periods=1).max().astype(bool)
+    mask = hist.notna() & (hist > 0) & rsi_was_oversold
+    return mask[mask].index.tolist()
 
 
 def detect_confluence_sell(df: pd.DataFrame, rsi_threshold: float) -> list[int]:
-    """Find indices where RSI was recently overbought AND MACD histogram is negative/falling."""
-    hits = []
+    """Find indices where RSI was recently overbought AND MACD histogram is negative."""
     rsi = df["rsi"]
     hist = df["macd_histogram"]
-    lookback = 5
-    for i in range(lookback, len(df)):
-        if pd.notna(hist.iloc[i]) and hist.iloc[i] < 0:
-            rsi_overbought = False
-            for j in range(max(0, i - lookback), i + 1):
-                if pd.notna(rsi.iloc[j]) and rsi.iloc[j] > rsi_threshold:
-                    rsi_overbought = True
-                    break
-            if rsi_overbought:
-                hits.append(i)
-    return hits
+    rsi_was_overbought = (rsi > rsi_threshold).rolling(window=CONFLUENCE_LOOKBACK + 1, min_periods=1).max().astype(bool)
+    mask = hist.notna() & (hist < 0) & rsi_was_overbought
+    return mask[mask].index.tolist()
 
 
 def detect_confluence_wait(df: pd.DataFrame, buy_thresh: float, sell_thresh: float) -> list[int]:
     """Find indices where RSI and MACD disagree (one bullish, one bearish)."""
-    hits = []
     rsi = df["rsi"]
     hist = df["macd_histogram"]
-    for i in range(len(df)):
-        if pd.notna(rsi.iloc[i]) and pd.notna(hist.iloc[i]):
-            rsi_val = rsi.iloc[i]
-            hist_val = hist.iloc[i]
-            # RSI oversold but MACD bearish
-            if rsi_val < buy_thresh and hist_val < 0:
-                hits.append(i)
-            # RSI overbought but MACD bullish
-            elif rsi_val > sell_thresh and hist_val > 0:
-                hits.append(i)
-    return hits
+    valid = rsi.notna() & hist.notna()
+    # RSI oversold but MACD bearish, or RSI overbought but MACD bullish
+    disagree = ((rsi < buy_thresh) & (hist < 0)) | ((rsi > sell_thresh) & (hist > 0))
+    mask = valid & disagree
+    return mask[mask].index.tolist()

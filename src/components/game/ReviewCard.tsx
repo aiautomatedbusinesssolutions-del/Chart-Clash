@@ -8,11 +8,7 @@ interface ReviewCardProps {
 }
 
 function getHeadline(result: RoundResult): string {
-  const scenario = result.scenario;
-  if (scenario.level === 3) {
-    return scenario.explanation.headline;
-  }
-  return scenario.explanation.headline;
+  return result.scenario.explanation.headline;
 }
 
 export function ReviewCard({ result }: ReviewCardProps) {

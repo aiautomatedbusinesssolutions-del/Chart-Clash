@@ -54,8 +54,12 @@ def run():
                 print(f"{len(scenarios)} scenarios")
 
             output_file = OUTPUT_DIR / f"level{level}" / f"{difficulty}.json"
-            with open(output_file, "w") as f:
-                json.dump(scenarios, f, separators=(",", ":"))
+            try:
+                with open(output_file, "w") as f:
+                    json.dump(scenarios, f, separators=(",", ":"))
+            except IOError as e:
+                print(f"  ERROR: Failed to write {output_file}: {e}")
+                sys.exit(1)
 
             total += len(scenarios)
 

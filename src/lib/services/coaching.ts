@@ -46,9 +46,6 @@ function getIndicatorNames(scenario: GameScenario): string[] {
 }
 
 function getExplanationHeadline(scenario: GameScenario): string {
-  if (scenario.level === 3) {
-    return scenario.explanation.headline;
-  }
   return scenario.explanation.headline;
 }
 

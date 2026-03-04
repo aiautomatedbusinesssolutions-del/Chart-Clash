@@ -45,6 +45,7 @@ export function LevelCard({ level, status, stars = 0, onSelect }: LevelCardProps
     <button
       disabled={isLocked}
       onClick={() => onSelect(level)}
+      aria-label={`Level ${level}: ${info.title}${isLocked ? " (locked)" : ""}`}
       className="w-full text-left cursor-pointer disabled:cursor-not-allowed"
     >
       <Card

@@ -34,6 +34,26 @@ WINDOW_SIZE = 60
 # Minimum scenarios per level/difficulty combo
 MIN_SCENARIOS = 12
 
+# Max candidates to collect per indicator type before balancing
+MAX_CANDIDATES_PER_TYPE = 8
+
+# Indicator computation parameters
+INDICATOR_PARAMS = {
+    "rsi_window": 14,
+    "bb_window": 20,
+    "bb_std": 2,
+    "macd_fast": 12,
+    "macd_slow": 26,
+    "macd_signal": 9,
+    "sma_short": 20,
+    "sma_long": 50,
+    "stoch_window": 14,
+    "stoch_smooth": 3,
+}
+
+# HTTP request timeout (seconds)
+REQUEST_TIMEOUT = 30
+
 # Signal thresholds by difficulty
 THRESHOLDS = {
     "easy": {

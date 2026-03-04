@@ -214,6 +214,7 @@ export default function SummaryPage() {
 
   const [coaching, setCoaching] = useState<CoachingResponse | null>(null);
   const [coachingLoading, setCoachingLoading] = useState(true);
+  const [coachingFailed, setCoachingFailed] = useState(false);
 
   // Redirect if no results
   const hasResults = Object.keys(levelResults).length > 0;
@@ -232,6 +233,7 @@ export default function SummaryPage() {
       })
       .catch(() => {
         if (!cancelled) {
+          setCoachingFailed(true);
           setCoachingLoading(false);
         }
       });
@@ -328,11 +330,18 @@ export default function SummaryPage() {
         ) : coaching ? (
           <CoachingSection coaching={coaching} />
         ) : (
-          <RuleBasedSection
-            strengths={advice.strengths}
-            weaknesses={advice.weaknesses}
-            tips={advice.tips}
-          />
+          <>
+            {coachingFailed && (
+              <p className="text-xs text-slate-600 text-center">
+                AI coaching unavailable — showing standard feedback instead.
+              </p>
+            )}
+            <RuleBasedSection
+              strengths={advice.strengths}
+              weaknesses={advice.weaknesses}
+              tips={advice.tips}
+            />
+          </>
         )}
 
         {/* Coming soon teaser */}

@@ -62,6 +62,7 @@ export function DifficultySelector({
           </div>
           <button
             onClick={onCancel}
+            aria-label="Close difficulty selector"
             className="p-3 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer min-w-[48px] min-h-[48px] flex items-center justify-center"
           >
             <X className="w-5 h-5" />

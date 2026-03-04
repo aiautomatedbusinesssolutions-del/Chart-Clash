@@ -4,8 +4,7 @@ import json
 import time
 import requests
 import pandas as pd
-from pathlib import Path
-from config import API_KEY, BASE_URL, CACHE_DIR, TICKERS
+from config import API_KEY, BASE_URL, CACHE_DIR, TICKERS, REQUEST_TIMEOUT
 
 
 def fetch_ohlcv(symbol: str, interval: str = "1day", outputsize: int = 1000) -> pd.DataFrame:
@@ -15,9 +14,12 @@ def fetch_ohlcv(symbol: str, interval: str = "1day", outputsize: int = 1000) -> 
     # Return cached data if available
     if cache_file.exists():
         print(f"  [cache] {symbol}")
-        with open(cache_file, "r") as f:
-            data = json.load(f)
-        return _parse_response(data, symbol)
+        try:
+            with open(cache_file, "r") as f:
+                data = json.load(f)
+            return _parse_response(data, symbol)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"  WARNING: Cache corrupted for {symbol}: {e}")
 
     # Fetch from API
     print(f"  [fetch] {symbol} ...", end=" ", flush=True)
@@ -27,17 +29,31 @@ def fetch_ohlcv(symbol: str, interval: str = "1day", outputsize: int = 1000) -> 
         "outputsize": outputsize,
         "apikey": API_KEY,
     }
-    resp = requests.get(f"{BASE_URL}/time_series", params=params)
-    resp.raise_for_status()
-    data = resp.json()
+
+    try:
+        resp = requests.get(f"{BASE_URL}/time_series", params=params, timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+        data = resp.json()
+    except requests.Timeout:
+        print(f"TIMEOUT after {REQUEST_TIMEOUT}s")
+        return pd.DataFrame()
+    except requests.RequestException as e:
+        print(f"ERROR: {e}")
+        return pd.DataFrame()
+    except json.JSONDecodeError:
+        print("ERROR: Invalid JSON response")
+        return pd.DataFrame()
 
     if "status" in data and data["status"] == "error":
         print(f"ERROR: {data.get('message', 'Unknown error')}")
         return pd.DataFrame()
 
     # Cache to disk
-    with open(cache_file, "w") as f:
-        json.dump(data, f)
+    try:
+        with open(cache_file, "w") as f:
+            json.dump(data, f)
+    except IOError as e:
+        print(f"  WARNING: Could not cache {symbol}: {e}")
 
     print("OK")
     # Rate limit: max 8 requests/minute on free tier

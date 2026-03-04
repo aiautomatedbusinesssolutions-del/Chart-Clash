@@ -30,6 +30,7 @@ export function RoundHeader({
       <div className="flex items-center gap-3">
         <button
           onClick={onHome}
+          aria-label="Go to home"
           className="p-3 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer min-w-[48px] min-h-[48px] flex items-center justify-center"
         >
           <Home className="w-5 h-5" />

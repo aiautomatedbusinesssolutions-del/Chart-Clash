@@ -2,7 +2,7 @@
 
 import random
 import pandas as pd
-from config import WINDOW_SIZE, INDICATOR_META, THRESHOLDS
+from config import WINDOW_SIZE, INDICATOR_META, THRESHOLDS, MAX_CANDIDATES_PER_TYPE
 from indicators import (
     detect_rsi_buy, detect_rsi_neutral, detect_rsi_sell,
     detect_bollinger_buy, detect_bollinger_neutral, detect_bollinger_sell,
@@ -155,7 +155,7 @@ def build_level1_scenarios(
 
     # Collect candidate scenarios per buy indicator type (max 8 each)
     candidates: dict[str, list[dict]] = {t: [] for t in pairs_by_type}
-    MAX_PER_TYPE = 8
+    MAX_PER_TYPE = MAX_CANDIDATES_PER_TYPE
 
     for buy_type, pairs in pairs_by_type.items():
         for buy_ind, neutral_ind in pairs:
@@ -373,7 +373,7 @@ def build_level2_scenarios(
             for symbol, df in all_data.items():
                 hits = detector(df, thresholds)
                 for idx in hits:
-                    if len(candidates[key]) >= 8:
+                    if len(candidates[key]) >= MAX_CANDIDATES_PER_TYPE:
                         break
                     window = extract_window(df, idx)
                     if window is not None and len(window) >= WINDOW_SIZE:
