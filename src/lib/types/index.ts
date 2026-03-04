@@ -122,10 +122,9 @@ export interface Level2Scenario {
   level: 2;
   difficulty: Difficulty;
   question: string;
-  stockLabel: string;
-  chartA: ChartConfig & { timeframe: "daily" | "weekly" };
-  chartB: ChartConfig & { timeframe: "daily" | "weekly" };
-  correctAnswer: ABAnswer;
+  chart: ChartConfig;
+  options: ConfluenceOption[];
+  correctAnswer: ConfluenceAnswer;
   explanation: ScenarioExplanation;
 }
 
@@ -190,4 +189,16 @@ export interface PersonalizedAdvice {
   strengths: string[];
   weaknesses: string[];
   tips: string[];
+}
+
+// ============================================================
+// AI Coaching (Gemini)
+// ============================================================
+
+export interface CoachingResponse {
+  strengths: string[];
+  weaknesses: string[];
+  encouragement: string;
+  nextSteps: string[];
+  funFact: string;
 }

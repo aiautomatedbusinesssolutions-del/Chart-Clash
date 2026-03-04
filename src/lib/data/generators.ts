@@ -417,24 +417,56 @@ function getNeutralPhases(): PhaseConfig[] {
   return [{ length: 65, dailyReturn: 0.0005, volatility: 0.007 }];
 }
 
-function getFakeoutPhases(difficulty: Difficulty): PhaseConfig[] {
-  const intensity = { easy: 1.0, medium: 0.7, hard: 0.4 }[difficulty];
-  return [
-    { length: 25, dailyReturn: -0.004, volatility: 0.007 },
-    { length: 10, dailyReturn: 0.007 * intensity, volatility: 0.005 },
-    { length: 15, dailyReturn: -0.005, volatility: 0.006 },
-    { length: 10, dailyReturn: -0.002, volatility: 0.006 },
-  ];
+function getSellPhases(
+  indicator: IndicatorType,
+  difficulty: Difficulty
+): PhaseConfig[] {
+  const intensity = { easy: 1.0, medium: 0.65, hard: 0.35 }[difficulty];
+
+  switch (indicator) {
+    case "rsi":
+    case "stochastic":
+      return [
+        { length: 30, dailyReturn: -0.001, volatility: 0.007 },
+        { length: 25, dailyReturn: 0.009 * intensity, volatility: 0.004 },
+        { length: 10, dailyReturn: -0.003, volatility: 0.005 },
+      ];
+    case "bollinger":
+      return [
+        { length: 30, dailyReturn: -0.0005, volatility: 0.006 },
+        { length: 15, dailyReturn: 0.012 * intensity, volatility: 0.003 },
+        { length: 10, dailyReturn: -0.002, volatility: 0.005 },
+      ];
+    case "macd":
+      return [
+        { length: 35, dailyReturn: 0.004, volatility: 0.005 },
+        { length: 20, dailyReturn: -0.008 * intensity, volatility: 0.004 },
+        { length: 10, dailyReturn: -0.004 * intensity, volatility: 0.005 },
+      ];
+    case "ma_crossover":
+      return [
+        { length: 40, dailyReturn: 0.003, volatility: 0.005 },
+        { length: 25, dailyReturn: -0.007 * intensity, volatility: 0.004 },
+        { length: 10, dailyReturn: -0.003 * intensity, volatility: 0.005 },
+      ];
+  }
 }
 
-function getBreakoutPhases(difficulty: Difficulty): PhaseConfig[] {
-  const intensity = { easy: 1.0, medium: 0.7, hard: 0.4 }[difficulty];
-  return [
-    { length: 25, dailyReturn: -0.004, volatility: 0.005 },
-    { length: 5, dailyReturn: 0.001, volatility: 0.003 },
-    { length: 20, dailyReturn: 0.007 * intensity, volatility: 0.004 },
-    { length: 10, dailyReturn: 0.004 * intensity, volatility: 0.005 },
-  ];
+function getWaitPhases(indicator: IndicatorType): PhaseConfig[] {
+  switch (indicator) {
+    case "rsi":
+    case "stochastic":
+      return [
+        { length: 25, dailyReturn: 0.001, volatility: 0.008 },
+        { length: 20, dailyReturn: -0.002, volatility: 0.007 },
+        { length: 20, dailyReturn: 0.001, volatility: 0.007 },
+      ];
+    case "bollinger":
+      return [{ length: 65, dailyReturn: 0.0005, volatility: 0.006 }];
+    case "macd":
+    case "ma_crossover":
+      return [{ length: 65, dailyReturn: 0.0005, volatility: 0.007 }];
+  }
 }
 
 function getConfluencePhases(
@@ -562,23 +594,57 @@ export function generateLevel1Scenario(
 }
 
 // ============================================================
-// Level 2: Fakeout vs Breakout
+// Level 2: Read the Signal
 // ============================================================
 
-const STOCK_LABELS = [
-  "Stock Alpha",
-  "Stock Beta",
-  "Stock Gamma",
-  "Stock Delta",
-  "Stock Echo",
-  "Stock Foxtrot",
-  "Stock Golf",
-  "Stock Hotel",
-  "Stock India",
-  "Stock Juliet",
-  "Stock Kilo",
-  "Stock Lima",
+const L2_ANSWER_ROTATION: ConfluenceAnswer[] = [
+  "buy", "sell", "wait", "buy", "sell", "wait",
+  "buy", "sell", "wait", "buy", "sell", "buy",
 ];
+
+const L2_INDICATOR_ROTATION: IndicatorType[] = [
+  "rsi", "bollinger", "macd", "ma_crossover", "stochastic",
+  "rsi", "macd", "stochastic", "bollinger", "ma_crossover",
+  "rsi", "macd",
+];
+
+function buildLevel2Explanation(
+  indicator: IndicatorType,
+  answer: ConfluenceAnswer
+): ScenarioExplanation {
+  const meta = INDICATOR_META[indicator];
+  const friendlyLabel = `${meta.friendlyName} (${meta.technicalName})`;
+
+  let headline: string;
+  let detail: string;
+  let lesson: string;
+
+  switch (answer) {
+    case "buy":
+      headline = `The ${meta.friendlyName} is showing a potential buy signal`;
+      detail = `The ${friendlyLabel} ${meta.buyDescription}. This historically suggests a potential buying opportunity.`;
+      lesson = `${friendlyLabel}: ${meta.description}. When it shows these conditions, it can historically signal that the price may be due for an upward move — but always confirm with other indicators before acting.`;
+      break;
+    case "sell":
+      headline = `The ${meta.friendlyName} is showing a potential sell signal`;
+      detail = `The ${friendlyLabel} ${meta.sellDescription}. This historically suggests a potential selling opportunity.`;
+      lesson = `${friendlyLabel}: ${meta.description}. When it shows these conditions, it can historically signal that the price may be due for a downward move — but no single indicator is perfect.`;
+      break;
+    case "wait":
+      headline = `The ${meta.friendlyName} is not showing a clear signal`;
+      detail = `The ${friendlyLabel} ${meta.waitDescription}. There is no extreme reading to act on right now.`;
+      lesson = `${friendlyLabel}: ${meta.description}. When the indicator is in its middle zone with no extreme reading, the wisest move is to wait. Patience is a skill — acting without a clear signal is a common mistake.`;
+      break;
+  }
+
+  return {
+    headline,
+    detail,
+    lesson,
+    disclaimer:
+      "This is for educational purposes only. Past patterns do not guarantee future results.",
+  };
+}
 
 export function generateLevel2Scenario(
   index: number,
@@ -586,72 +652,48 @@ export function generateLevel2Scenario(
   seed: number
 ): Level2Scenario {
   const rng = createRng(seed);
-  const stockLabel = STOCK_LABELS[index % STOCK_LABELS.length];
+  const targetAnswer = L2_ANSWER_ROTATION[index % L2_ANSWER_ROTATION.length];
+  const indicatorType = L2_INDICATOR_ROTATION[index % L2_INDICATOR_ROTATION.length];
 
-  const fakeoutCandles = generateCandles({
+  let phases: PhaseConfig[];
+  switch (targetAnswer) {
+    case "buy":
+      phases = getBuyPhases(indicatorType, difficulty);
+      break;
+    case "sell":
+      phases = getSellPhases(indicatorType, difficulty);
+      break;
+    case "wait":
+      phases = getWaitPhases(indicatorType);
+      break;
+  }
+
+  const candles = generateCandles({
     basePrice: 100 + rng() * 200,
-    baseVolume: 2000000,
-    phases: getFakeoutPhases(difficulty),
+    baseVolume: 1000000 + rng() * 4000000,
+    phases,
     seed: seed + 1,
   });
-  const fakeoutMACD = computeIndicator(fakeoutCandles, "macd");
-
-  const breakoutCandles = generateCandles({
-    basePrice: 100 + rng() * 200,
-    baseVolume: 2000000,
-    phases: getBreakoutPhases(difficulty),
-    seed: seed + 2,
-  });
-  const breakoutMACD = computeIndicator(breakoutCandles, "macd");
-
-  const fakeoutIsDaily = difficulty === "hard" ? rng() > 0.5 : true;
-  const breakoutOnA = rng() > 0.5;
-
-  const dailyTf = fakeoutIsDaily ? "daily" : "weekly";
-  const weeklyTf = fakeoutIsDaily ? "weekly" : "daily";
+  const indicatorData = computeIndicator(candles, indicatorType);
+  const meta = INDICATOR_META[indicatorType];
 
   return {
     id: `l2-${difficulty}-${index}`,
     level: 2,
     difficulty,
-    question:
-      "Which chart shows a more reliable buy signal — and which might be a trap?",
-    stockLabel,
-    chartA: breakoutOnA
-      ? {
-          candles: breakoutCandles,
-          indicator: breakoutMACD,
-          label: `Chart A — ${weeklyTf.charAt(0).toUpperCase() + weeklyTf.slice(1)} View`,
-          timeframe: weeklyTf as "daily" | "weekly",
-        }
-      : {
-          candles: fakeoutCandles,
-          indicator: fakeoutMACD,
-          label: `Chart A — ${dailyTf.charAt(0).toUpperCase() + dailyTf.slice(1)} View`,
-          timeframe: dailyTf as "daily" | "weekly",
-        },
-    chartB: breakoutOnA
-      ? {
-          candles: fakeoutCandles,
-          indicator: fakeoutMACD,
-          label: `Chart B — ${dailyTf.charAt(0).toUpperCase() + dailyTf.slice(1)} View`,
-          timeframe: dailyTf as "daily" | "weekly",
-        }
-      : {
-          candles: breakoutCandles,
-          indicator: breakoutMACD,
-          label: `Chart B — ${weeklyTf.charAt(0).toUpperCase() + weeklyTf.slice(1)} View`,
-          timeframe: weeklyTf as "daily" | "weekly",
-        },
-    correctAnswer: breakoutOnA ? "A" : "B",
-    explanation: {
-      headline: `Chart ${breakoutOnA ? "A" : "B"} shows the more reliable signal`,
-      detail: `The ${fakeoutIsDaily ? "daily" : "weekly"} chart's Trend Momentum crossed briefly but quickly faded — a classic fakeout. The ${fakeoutIsDaily ? "weekly" : "daily"} chart shows sustained momentum with growing bars, suggesting a more genuine shift.`,
-      lesson:
-        "When a short-term chart says \"go\" but the bigger picture disagrees, the bigger picture usually wins. Always check multiple timeframes before acting on a signal.",
-      disclaimer:
-        "This is for educational purposes only. Past patterns do not guarantee future results.",
+    question: "What is this indicator telling you?",
+    chart: {
+      candles,
+      indicator: indicatorData,
+      label: `${meta.friendlyName} (${meta.technicalName})`,
     },
+    options: [
+      { id: "buy", label: "Buy", description: "The indicator suggests a potential buy" },
+      { id: "wait", label: "Wait", description: "No clear signal — hold off for now" },
+      { id: "sell", label: "Sell", description: "The indicator suggests a potential sell" },
+    ],
+    correctAnswer: targetAnswer,
+    explanation: buildLevel2Explanation(indicatorType, targetAnswer),
   };
 }
 
@@ -676,47 +718,99 @@ const ANSWER_ROTATION: ConfluenceAnswer[] = [
 
 function buildLevel3Explanation(
   answer: ConfluenceAnswer,
-  rsiValues: (number | null)[]
+  rsiValues: (number | null)[],
+  macdHistogram: (number | null)[]
 ): Level3Scenario["explanation"] {
   const lastRSI =
     ([...rsiValues].reverse().find((v) => v !== null) as number) ?? 50;
+  const roundedRSI = Math.round(lastRSI);
+
+  const lastHist =
+    ([...macdHistogram].reverse().find((v) => v !== null) as number) ?? 0;
+
+  // Recent histogram trend
+  const recentHists = macdHistogram
+    .filter((v) => v !== null)
+    .slice(-5) as number[];
+  const histGrowing =
+    recentHists.length >= 2 &&
+    Math.abs(recentHists[recentHists.length - 1]) >
+      Math.abs(recentHists[0]);
+
+  // RSI description
+  let rsiVisual: string;
+  let rsiMeaning: string;
+  let rsiZone: string;
+  if (lastRSI < 30) {
+    rsiVisual = `the blue line has dropped below the lower red dashed line (30 level) to around ${roundedRSI}`;
+    rsiMeaning =
+      "sellers may have pushed the price too low — historically, this can signal a potential bounce";
+    rsiZone = "oversold";
+  } else if (lastRSI > 70) {
+    rsiVisual = `the blue line has climbed above the upper red dashed line (70 level) to around ${roundedRSI}`;
+    rsiMeaning =
+      "buyers may have pushed the price too high — historically, this can signal a potential pullback";
+    rsiZone = "overbought";
+  } else {
+    rsiVisual = `the blue line is at around ${roundedRSI}, sitting between the two dashed lines (30 and 70)`;
+    rsiMeaning =
+      "there's no extreme reading — the price isn't stretched in either direction";
+    rsiZone = "neutral";
+  }
+
+  // MACD description
+  let macdVisual: string;
+  if (lastHist > 0) {
+    macdVisual = "the histogram bars are green (above the zero line)";
+    macdVisual += histGrowing
+      ? " and getting taller — upward momentum is building"
+      : " but starting to shrink — upward momentum may be fading";
+  } else if (lastHist < 0) {
+    macdVisual = "the histogram bars are red (below the zero line)";
+    macdVisual += histGrowing
+      ? " and getting deeper — downward momentum is building"
+      : " but starting to shrink — downward momentum may be fading";
+  } else {
+    macdVisual = "the histogram bars are near zero — momentum is flat";
+  }
 
   switch (answer) {
     case "buy":
       return {
-        headline: "Both indicators suggest a potential buying opportunity",
-        rsiReason: `The Momentum Meter dropped to around ${Math.round(lastRSI)}, which is in the oversold zone. Historically, this suggests sellers may have pushed the price too low.`,
-        macdReason:
-          "The Trend Momentum histogram is turning positive, showing momentum may be shifting upward.",
-        confluenceReason:
-          'When two different indicators flash the same signal, it\'s called "confluence." It\'s like getting a second opinion — when both agree, you can have more confidence in the signal.',
+        headline: "Both indicators agree — this is a potential buying opportunity",
+        rsiReason: `Look at the Momentum Meter (RSI) panel: ${rsiVisual}. This means ${rsiMeaning}.`,
+        macdReason: `Now check the Trend Momentum (MACD) panel at the bottom: ${macdVisual}. The blue MACD line is crossing above the orange signal line, confirming upward momentum is building.`,
+        confluenceReason: `Both indicators point the same way: RSI shows the price is in the ${rsiZone} zone (potential bounce), and MACD confirms momentum is turning upward. When two indicators agree, it's called "confluence" — like getting a second opinion that confirms the first. This makes the buy signal more reliable than either indicator alone.`,
         disclaimer:
           "This is for educational purposes only. Past patterns do not guarantee future results.",
       };
     case "sell":
       return {
-        headline: "Both indicators suggest a potential selling opportunity",
-        rsiReason: `The Momentum Meter climbed to around ${Math.round(lastRSI)}, which is in the overbought zone. Historically, this suggests buyers may have pushed the price too high.`,
-        macdReason:
-          "The Trend Momentum histogram is turning negative, showing momentum may be shifting downward.",
-        confluenceReason:
-          "Both indicators are flashing the same warning — the price may have gotten ahead of itself. When they agree, the signal carries more weight.",
+        headline: "Both indicators agree — this is a potential selling opportunity",
+        rsiReason: `Look at the Momentum Meter (RSI) panel: ${rsiVisual}. This means ${rsiMeaning}.`,
+        macdReason: `Now check the Trend Momentum (MACD) panel at the bottom: ${macdVisual}. The blue MACD line is below the orange signal line, confirming downward momentum.`,
+        confluenceReason: `Both indicators point the same way: RSI shows the price is in the ${rsiZone} zone (potential pullback), and MACD confirms momentum is turning downward. This is confluence — two independent signals agreeing makes the sell signal stronger. A common mistake is looking at just one indicator. Always check if both panels tell the same story.`,
         disclaimer:
           "This is for educational purposes only. Past patterns do not guarantee future results.",
       };
-    case "wait":
+    case "wait": {
+      let disagreement: string;
+      if (lastRSI < 30 && lastHist < 0) {
+        disagreement = `The RSI is in the oversold zone at ${roundedRSI}, which might tempt you to buy. But look at the MACD — the histogram bars are red and pointing downward, meaning momentum is still falling. RSI says 'the price looks cheap,' but MACD says 'it's still dropping.' That's a mixed signal.`;
+      } else if (lastRSI > 70 && lastHist > 0) {
+        disagreement = `The RSI is in the overbought zone at ${roundedRSI}, which might tempt you to sell. But look at the MACD — the histogram bars are green and pointing upward, meaning momentum is still rising. RSI says 'the price looks stretched,' but MACD says 'it's still climbing.' That's a mixed signal.`;
+      } else {
+        disagreement = `The RSI is at ${roundedRSI} (${rsiZone} zone) while the MACD histogram shows ${lastHist > 0 ? "upward" : "downward"} momentum. These two indicators are telling different stories.`;
+      }
       return {
-        headline:
-          "The indicators disagree — best to wait for confirmation",
-        rsiReason:
-          "The Momentum Meter is sending one signal, but it's not extreme enough to be decisive on its own.",
-        macdReason:
-          "The Trend Momentum is telling a different story, suggesting momentum hasn't fully committed to a direction.",
-        confluenceReason:
-          "When indicators disagree, it's like two friends giving opposite advice. The safest move is to wait until they start agreeing before making a decision.",
+        headline: "The indicators disagree — best to wait for confirmation",
+        rsiReason: `Look at the Momentum Meter (RSI) panel: ${rsiVisual}. This means ${rsiMeaning}.`,
+        macdReason: `Now check the Trend Momentum (MACD) panel at the bottom: ${macdVisual}.`,
+        confluenceReason: `${disagreement} When indicators disagree, acting on just one while ignoring the other is a common mistake. The safest move is to wait until both panels tell the same story before making a decision.`,
         disclaimer:
           "This is for educational purposes only. Past patterns do not guarantee future results.",
       };
+    }
   }
 }
 
@@ -777,7 +871,8 @@ export function generateLevel3Scenario(
     correctAnswer: targetAnswer,
     explanation: buildLevel3Explanation(
       targetAnswer,
-      rsiValues
+      rsiValues,
+      macdResult.histogram
     ),
   };
 }

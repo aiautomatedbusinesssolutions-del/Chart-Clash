@@ -8,6 +8,7 @@ import { RoundHeader } from "@/components/game/RoundHeader";
 import { ProgressBar } from "@/components/game/ProgressBar";
 import { AnswerFeedback } from "@/components/game/AnswerFeedback";
 import { ChartOption } from "@/components/charts/ChartOption";
+import { CandlestickChart } from "@/components/charts/CandlestickChart";
 import { ConfluenceChart } from "@/components/charts/ConfluenceChart";
 import { Card } from "@/components/ui/Card";
 import { cn } from "@/lib/utils/cn";
@@ -179,7 +180,7 @@ function Level1Content({
 }
 
 // ============================================================
-// Level 2: Fakeout vs Breakout (same layout, different context)
+// Level 2: Read the Signal — single chart, 3 answer buttons
 // ============================================================
 
 function Level2Content({
@@ -194,31 +195,53 @@ function Level2Content({
   onAnswer: (answer: string) => void;
 }) {
   const chartHeight = useChartHeight(250, 180);
+  const colorMap = {
+    buy: { active: "border-emerald-400 bg-emerald-500/10 text-emerald-400", base: "text-emerald-400" },
+    wait: { active: "border-amber-400 bg-amber-500/10 text-amber-400", base: "text-amber-400" },
+    sell: { active: "border-rose-400 bg-rose-500/10 text-rose-400", base: "text-rose-400" },
+  };
 
   return (
-    <div>
-      <p className="text-sm text-slate-400 text-center mb-3">
-        {scenario.stockLabel}
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <ChartOption
-          config={scenario.chartA}
-          label={scenario.chartA.label}
-          selected={playerAnswer === "A"}
-          correct={isFeedback ? scenario.correctAnswer === "A" : undefined}
-          disabled={isFeedback}
-          chartHeight={chartHeight}
-          onClick={() => onAnswer("A")}
-        />
-        <ChartOption
-          config={scenario.chartB}
-          label={scenario.chartB.label}
-          selected={playerAnswer === "B"}
-          correct={isFeedback ? scenario.correctAnswer === "B" : undefined}
-          disabled={isFeedback}
-          chartHeight={chartHeight}
-          onClick={() => onAnswer("B")}
-        />
+    <div className="space-y-4">
+      <Card className="overflow-hidden">
+        <p className="text-xs text-slate-400 mb-2 px-1">
+          <span className="text-sky-400 font-medium">Indicator:</span>{" "}
+          {scenario.chart.label}
+        </p>
+        <div className="pointer-events-none">
+          <CandlestickChart config={scenario.chart} height={chartHeight} />
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {scenario.options.map((option) => {
+          const isSelected = playerAnswer === option.id;
+          const isCorrectAnswer = scenario.correctAnswer === option.id;
+          const colors = colorMap[option.id];
+
+          return (
+            <button
+              key={option.id}
+              onClick={() => onAnswer(option.id)}
+              disabled={isFeedback}
+              className={cn(
+                "p-4 rounded-xl border border-slate-800 text-center transition-all cursor-pointer",
+                "disabled:cursor-default min-h-[48px]",
+                !isFeedback && "hover:bg-slate-800",
+                isSelected && !isFeedback && colors.active,
+                isFeedback && isCorrectAnswer && "border-emerald-400 bg-emerald-500/10",
+                isFeedback && isSelected && !isCorrectAnswer && "border-rose-400 bg-rose-500/10"
+              )}
+            >
+              <span className={cn("font-semibold text-base", colors.base)}>
+                {option.label}
+              </span>
+              <p className="text-xs text-slate-400 mt-1 sm:hidden">
+                {option.description}
+              </p>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

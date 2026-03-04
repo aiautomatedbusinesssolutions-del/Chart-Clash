@@ -79,7 +79,7 @@ export function ConfluenceChart({
     // Pane 1: RSI
     const rsiSeries = chart.addSeries(LineSeries, {
       color: "#38bdf8",
-      lineWidth: 2,
+      lineWidth: 3,
       priceScaleId: "rsi",
     }, 1);
     rsiSeries.setData(rsi.values);
@@ -109,14 +109,14 @@ export function ConfluenceChart({
     // Pane 2: MACD
     const macdLineSeries = chart.addSeries(LineSeries, {
       color: "#38bdf8",
-      lineWidth: 2,
+      lineWidth: 3,
       priceScaleId: "macd",
     }, 2);
     macdLineSeries.setData(macd.macdLine);
 
     const signalSeries = chart.addSeries(LineSeries, {
       color: "#fb923c",
-      lineWidth: 2,
+      lineWidth: 3,
       priceScaleId: "macd",
     }, 2);
     signalSeries.setData(macd.signalLine);
@@ -125,6 +125,17 @@ export function ConfluenceChart({
       priceScaleId: "macd",
     }, 2);
     histSeries.setData(macd.histogram);
+
+    // MACD zero reference line
+    const zeroLine = macd.macdLine.map((v) => ({ time: v.time, value: 0 }));
+    const zeroSeries = chart.addSeries(LineSeries, {
+      color: "#94a3b840",
+      lineWidth: 1,
+      lineStyle: 2,
+      priceScaleId: "macd",
+      crosshairMarkerVisible: false,
+    }, 2);
+    zeroSeries.setData(zeroLine);
 
     chart.timeScale().fitContent();
 

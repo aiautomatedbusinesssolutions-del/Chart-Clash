@@ -81,7 +81,7 @@ export function CandlestickChart({
       case "rsi": {
         const rsiSeries = chart.addSeries(LineSeries, {
           color: meta.color,
-          lineWidth: 2,
+          lineWidth: 3,
           priceScaleId: "rsi",
         }, 1);
         rsiSeries.setData(indicator.values);
@@ -120,14 +120,14 @@ export function CandlestickChart({
         // Overlay on main pane (pane 0)
         const upperSeries = chart.addSeries(LineSeries, {
           color: meta.secondaryColor ?? meta.color,
-          lineWidth: 1,
+          lineWidth: 2,
           crosshairMarkerVisible: false,
         });
         upperSeries.setData(indicator.upper);
 
         const middleSeries = chart.addSeries(LineSeries, {
           color: meta.color,
-          lineWidth: 1,
+          lineWidth: 2,
           lineStyle: 2,
           crosshairMarkerVisible: false,
         });
@@ -135,7 +135,7 @@ export function CandlestickChart({
 
         const lowerSeries = chart.addSeries(LineSeries, {
           color: meta.secondaryColor ?? meta.color,
-          lineWidth: 1,
+          lineWidth: 2,
           crosshairMarkerVisible: false,
         });
         lowerSeries.setData(indicator.lower);
@@ -145,14 +145,14 @@ export function CandlestickChart({
       case "macd": {
         const macdLineSeries = chart.addSeries(LineSeries, {
           color: meta.color,
-          lineWidth: 2,
+          lineWidth: 3,
           priceScaleId: "macd",
         }, 1);
         macdLineSeries.setData(indicator.macdLine);
 
         const signalSeries = chart.addSeries(LineSeries, {
           color: meta.secondaryColor ?? "#fb923c",
-          lineWidth: 2,
+          lineWidth: 3,
           priceScaleId: "macd",
         }, 1);
         signalSeries.setData(indicator.signalLine);
@@ -161,6 +161,20 @@ export function CandlestickChart({
           priceScaleId: "macd",
         }, 1);
         histSeries.setData(indicator.histogram);
+
+        // Zero reference line
+        const zeroLine = indicator.macdLine.map((v) => ({
+          time: v.time,
+          value: 0,
+        }));
+        const zeroSeries = chart.addSeries(LineSeries, {
+          color: "#94a3b840",
+          lineWidth: 1,
+          lineStyle: 2,
+          priceScaleId: "macd",
+          crosshairMarkerVisible: false,
+        }, 1);
+        zeroSeries.setData(zeroLine);
         break;
       }
 
@@ -168,14 +182,14 @@ export function CandlestickChart({
         // Overlay on main pane
         const shortSeries = chart.addSeries(LineSeries, {
           color: meta.color,
-          lineWidth: 2,
+          lineWidth: 3,
           crosshairMarkerVisible: false,
         });
         shortSeries.setData(indicator.shortMA);
 
         const longSeries = chart.addSeries(LineSeries, {
           color: meta.secondaryColor ?? "#fbbf24",
-          lineWidth: 2,
+          lineWidth: 3,
           crosshairMarkerVisible: false,
         });
         longSeries.setData(indicator.longMA);
@@ -185,14 +199,14 @@ export function CandlestickChart({
       case "stochastic": {
         const kSeries = chart.addSeries(LineSeries, {
           color: meta.color,
-          lineWidth: 2,
+          lineWidth: 3,
           priceScaleId: "stoch",
         }, 1);
         kSeries.setData(indicator.kLine);
 
         const dSeries = chart.addSeries(LineSeries, {
           color: meta.secondaryColor ?? "#fbbf24",
-          lineWidth: 2,
+          lineWidth: 3,
           priceScaleId: "stoch",
         }, 1);
         dSeries.setData(indicator.dLine);

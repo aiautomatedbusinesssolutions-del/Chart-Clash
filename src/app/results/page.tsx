@@ -12,7 +12,7 @@ import type { LevelNumber } from "@/lib/types";
 
 const LEVEL_TITLES: Record<LevelNumber, string> = {
   1: "Indicator Recognition",
-  2: "Fakeout vs Breakout",
+  2: "Read the Signal",
   3: "Confluence",
 };
 

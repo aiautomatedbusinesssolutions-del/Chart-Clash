@@ -5,11 +5,10 @@ import pandas as pd
 from config import WINDOW_SIZE, INDICATOR_META, THRESHOLDS
 from indicators import (
     detect_rsi_buy, detect_rsi_neutral, detect_rsi_sell,
-    detect_bollinger_buy, detect_bollinger_neutral,
-    detect_macd_buy, detect_macd_neutral,
-    detect_ma_crossover_buy, detect_ma_crossover_neutral,
-    detect_stochastic_buy, detect_stochastic_neutral,
-    detect_macd_fakeout, detect_macd_breakout,
+    detect_bollinger_buy, detect_bollinger_neutral, detect_bollinger_sell,
+    detect_macd_buy, detect_macd_neutral, detect_macd_sell,
+    detect_ma_crossover_buy, detect_ma_crossover_neutral, detect_ma_crossover_sell,
+    detect_stochastic_buy, detect_stochastic_neutral, detect_stochastic_sell,
     detect_confluence_buy, detect_confluence_sell, detect_confluence_wait,
 )
 
@@ -146,198 +145,444 @@ def build_level1_scenarios(
     all_data: dict[str, pd.DataFrame],
     difficulty: str,
 ) -> list[dict]:
-    """Build Level 1 scenarios from real data."""
+    """Build Level 1 scenarios with balanced indicator distribution."""
     thresholds = THRESHOLDS[difficulty]
-    scenarios = []
-    scenario_id = 0
 
-    for pair_idx, (buy_ind, neutral_ind) in enumerate(INDICATOR_PAIRS):
-        for symbol, df in all_data.items():
-            if len(scenarios) >= 20:
+    # Group pairs by buy indicator type
+    pairs_by_type: dict[str, list[tuple[str, str]]] = {}
+    for buy_ind, neutral_ind in INDICATOR_PAIRS:
+        pairs_by_type.setdefault(buy_ind, []).append((buy_ind, neutral_ind))
+
+    # Collect candidate scenarios per buy indicator type (max 8 each)
+    candidates: dict[str, list[dict]] = {t: [] for t in pairs_by_type}
+    MAX_PER_TYPE = 8
+
+    for buy_type, pairs in pairs_by_type.items():
+        for buy_ind, neutral_ind in pairs:
+            if len(candidates[buy_type]) >= MAX_PER_TYPE:
                 break
+            for symbol, df in all_data.items():
+                if len(candidates[buy_type]) >= MAX_PER_TYPE:
+                    break
 
-            buy_hits = BUY_DETECTORS[buy_ind](df, thresholds)
-            neutral_hits = NEUTRAL_DETECTORS[neutral_ind](df, thresholds)
+                buy_hits = BUY_DETECTORS[buy_ind](df, thresholds)
+                neutral_hits = NEUTRAL_DETECTORS[neutral_ind](df, thresholds)
 
-            if not buy_hits or not neutral_hits:
-                continue
-
-            # Pick a buy signal and a neutral signal that don't overlap
-            random.shuffle(buy_hits)
-            random.shuffle(neutral_hits)
-
-            for buy_idx in buy_hits[:3]:
-                buy_window = extract_window(df, buy_idx)
-                if buy_window is None or len(buy_window) < WINDOW_SIZE:
+                if not buy_hits or not neutral_hits:
                     continue
 
-                for neutral_idx in neutral_hits[:3]:
-                    if abs(buy_idx - neutral_idx) < WINDOW_SIZE:
-                        continue  # Too close, would be same data
+                random.shuffle(buy_hits)
+                random.shuffle(neutral_hits)
 
-                    neutral_window = extract_window(df, neutral_idx)
-                    if neutral_window is None or len(neutral_window) < WINDOW_SIZE:
+                for buy_idx in buy_hits[:3]:
+                    if len(candidates[buy_type]) >= MAX_PER_TYPE:
+                        break
+                    buy_window = extract_window(df, buy_idx)
+                    if buy_window is None or len(buy_window) < WINDOW_SIZE:
                         continue
 
-                    buy_on_a = random.random() > 0.5
-                    buy_meta = INDICATOR_META[buy_ind]
-                    neutral_meta = INDICATOR_META[neutral_ind]
-                    buy_label = f"{buy_meta['friendlyName']} ({buy_meta['technicalName']})"
-                    neutral_label = f"{neutral_meta['friendlyName']} ({neutral_meta['technicalName']})"
-                    chart = "A" if buy_on_a else "B"
-                    other = "B" if buy_on_a else "A"
+                    for neutral_idx in neutral_hits[:3]:
+                        if len(candidates[buy_type]) >= MAX_PER_TYPE:
+                            break
+                        if abs(buy_idx - neutral_idx) < WINDOW_SIZE:
+                            continue
 
-                    buy_candles = window_to_candles(buy_window)
-                    neutral_candles = window_to_candles(neutral_window)
-                    buy_indicator = INDICATOR_BUILDERS[buy_ind](buy_window)
-                    neutral_indicator = INDICATOR_BUILDERS[neutral_ind](neutral_window)
+                        neutral_window = extract_window(df, neutral_idx)
+                        if neutral_window is None or len(neutral_window) < WINDOW_SIZE:
+                            continue
 
-                    scenario = {
-                        "id": f"l1-{difficulty}-{scenario_id}",
-                        "level": 1,
-                        "difficulty": difficulty,
-                        "question": "Which chart is showing a potential buy condition?",
-                        "chartA": {
-                            "candles": buy_candles if buy_on_a else neutral_candles,
-                            "indicator": buy_indicator if buy_on_a else neutral_indicator,
-                            "label": f"Chart A — {buy_label if buy_on_a else neutral_label}",
-                        },
-                        "chartB": {
-                            "candles": neutral_candles if buy_on_a else buy_candles,
-                            "indicator": neutral_indicator if buy_on_a else buy_indicator,
-                            "label": f"Chart B — {neutral_label if buy_on_a else buy_label}",
-                        },
-                        "correctAnswer": "A" if buy_on_a else "B",
-                        "explanation": {
-                            "headline": f"Chart {chart} is showing a potential buy condition",
-                            "detail": (
-                                f"The {buy_meta['friendlyName']} ({buy_meta['technicalName']}) "
-                                f"on Chart {chart} {buy_meta['buyDescription']}. "
-                                f"Meanwhile, Chart {other}'s {neutral_meta['friendlyName']} "
-                                f"({neutral_meta['technicalName']}) {neutral_meta['neutralDescription']}."
-                            ),
-                            "lesson": (
-                                f"{buy_meta['friendlyName']} ({buy_meta['technicalName']}): "
-                                f"{buy_meta['description']}. When it reaches extreme levels, "
-                                f"it can historically signal a potential opportunity — "
-                                f"but always look for confirmation from other indicators."
-                            ),
-                            "disclaimer": "This is for educational purposes only. Past patterns do not guarantee future results.",
-                        },
-                    }
-                    scenarios.append(scenario)
-                    scenario_id += 1
+                        buy_on_a = random.random() > 0.5
+                        buy_meta = INDICATOR_META[buy_ind]
+                        neutral_meta = INDICATOR_META[neutral_ind]
+                        buy_label = f"{buy_meta['friendlyName']} ({buy_meta['technicalName']})"
+                        neutral_label = f"{neutral_meta['friendlyName']} ({neutral_meta['technicalName']})"
+                        chart = "A" if buy_on_a else "B"
+                        other = "B" if buy_on_a else "A"
 
-                    if len(scenarios) >= 20:
-                        break
-                if len(scenarios) >= 20:
-                    break
-            if len(scenarios) >= 20:
-                break
+                        buy_candles = window_to_candles(buy_window)
+                        neutral_candles = window_to_candles(neutral_window)
+                        buy_indicator_data = INDICATOR_BUILDERS[buy_ind](buy_window)
+                        neutral_indicator_data = INDICATOR_BUILDERS[neutral_ind](neutral_window)
+
+                        scenario = {
+                            "id": f"l1-{difficulty}-0",
+                            "level": 1,
+                            "difficulty": difficulty,
+                            "question": "Which chart is showing a potential buy condition?",
+                            "chartA": {
+                                "candles": buy_candles if buy_on_a else neutral_candles,
+                                "indicator": buy_indicator_data if buy_on_a else neutral_indicator_data,
+                                "label": f"Chart A — {buy_label if buy_on_a else neutral_label}",
+                            },
+                            "chartB": {
+                                "candles": neutral_candles if buy_on_a else buy_candles,
+                                "indicator": neutral_indicator_data if buy_on_a else buy_indicator_data,
+                                "label": f"Chart B — {neutral_label if buy_on_a else buy_label}",
+                            },
+                            "correctAnswer": "A" if buy_on_a else "B",
+                            "explanation": {
+                                "headline": f"Chart {chart} is showing a potential buy condition",
+                                "detail": (
+                                    f"The {buy_meta['friendlyName']} ({buy_meta['technicalName']}) "
+                                    f"on Chart {chart} {buy_meta['buyDescription']}. "
+                                    f"Meanwhile, Chart {other}'s {neutral_meta['friendlyName']} "
+                                    f"({neutral_meta['technicalName']}) {neutral_meta['neutralDescription']}."
+                                ),
+                                "lesson": (
+                                    f"{buy_meta['friendlyName']} ({buy_meta['technicalName']}): "
+                                    f"{buy_meta['description']}. When it reaches extreme levels, "
+                                    f"it can historically signal a potential opportunity — "
+                                    f"but always look for confirmation from other indicators."
+                                ),
+                                "disclaimer": "This is for educational purposes only. Past patterns do not guarantee future results.",
+                            },
+                        }
+                        candidates[buy_type].append(scenario)
+                        break  # One scenario per buy_idx to maximize variety
+
+    # Log candidate counts
+    for t, c in candidates.items():
+        print(f"  {t}: {len(c)} candidates")
+
+    # Balanced selection: distribute 20 slots across types with candidates
+    types_with_candidates = [t for t in candidates if candidates[t]]
+    if not types_with_candidates:
+        return []
+
+    target_per_type = 20 // len(types_with_candidates)
+    remainder = 20 % len(types_with_candidates)
+
+    scenarios = []
+    overflow = []
+    random.shuffle(types_with_candidates)
+
+    for i, t in enumerate(types_with_candidates):
+        target = target_per_type + (1 if i < remainder else 0)
+        random.shuffle(candidates[t])
+        take = min(target, len(candidates[t]))
+        scenarios.extend(candidates[t][:take])
+        if len(candidates[t]) > take:
+            overflow.extend(candidates[t][take:])
+
+    # Fill remaining slots from overflow
+    needed = 20 - len(scenarios)
+    if needed > 0 and overflow:
+        random.shuffle(overflow)
+        scenarios.extend(overflow[:needed])
 
     random.shuffle(scenarios)
-    # Re-number IDs
     for i, s in enumerate(scenarios):
         s["id"] = f"l1-{difficulty}-{i}"
     return scenarios
 
 
 # ============================================================
-# Level 2: Fakeout vs Breakout
+# Level 2: Read the Signal
 # ============================================================
+
+SELL_DETECTORS = {
+    "rsi": lambda df, t: detect_rsi_sell(df, t["rsi_sell"]),
+    "bollinger": lambda df, t: detect_bollinger_sell(df, t["bb_touch_pct"]),
+    "macd": lambda df, _: detect_macd_sell(df),
+    "ma_crossover": lambda df, _: detect_ma_crossover_sell(df),
+    "stochastic": lambda df, t: detect_stochastic_sell(df, t["stoch_sell"]),
+}
+
+# Balanced rotation: 4 buy, 4 sell, 4 wait per difficulty
+L2_ANSWER_ROTATION = [
+    "buy", "sell", "wait", "buy", "sell", "wait",
+    "buy", "sell", "wait", "buy", "sell", "buy",
+    "sell", "wait", "buy", "sell", "wait", "buy",
+    "sell", "wait",
+]
+
+# Cycle through all 5 indicator types
+L2_INDICATOR_ROTATION = [
+    "rsi", "bollinger", "macd", "ma_crossover", "stochastic",
+    "rsi", "macd", "stochastic", "bollinger", "ma_crossover",
+    "rsi", "macd", "bollinger", "stochastic", "ma_crossover",
+    "rsi", "bollinger", "macd", "stochastic", "ma_crossover",
+]
+
+
+def _build_level2_explanation(indicator_type: str, answer: str) -> dict:
+    """Build Level 2 explanation based on indicator and answer type."""
+    meta = INDICATOR_META[indicator_type]
+    friendly = f"{meta['friendlyName']} ({meta['technicalName']})"
+
+    if answer == "buy":
+        return {
+            "headline": f"The {meta['friendlyName']} is showing a potential buy signal",
+            "detail": (
+                f"The {friendly} {meta['buyDescription']}. "
+                f"This is one of the classic patterns that traders watch for when looking for buying opportunities."
+            ),
+            "lesson": (
+                f"{friendly}: {meta['description']}. "
+                f"Remember — no single indicator is perfect. In Level 3, you'll learn to combine "
+                f"two indicators for stronger signals."
+            ),
+            "disclaimer": "This is for educational purposes only. Past patterns do not guarantee future results.",
+        }
+    elif answer == "sell":
+        return {
+            "headline": f"The {meta['friendlyName']} is showing a potential sell signal",
+            "detail": (
+                f"The {friendly} {meta['sellDescription']}. "
+                f"This is one of the classic patterns that traders watch for when considering selling."
+            ),
+            "lesson": (
+                f"{friendly}: {meta['description']}. "
+                f"Sell signals are just as important as buy signals — knowing when to step back "
+                f"is a key skill in reading charts."
+            ),
+            "disclaimer": "This is for educational purposes only. Past patterns do not guarantee future results.",
+        }
+    else:  # wait
+        return {
+            "headline": f"The {meta['friendlyName']} is not showing a clear signal — best to wait",
+            "detail": (
+                f"The {friendly} {meta['waitDescription']}. "
+                f"When an indicator isn't giving a strong reading, patience is usually the best strategy."
+            ),
+            "lesson": (
+                f"{friendly}: {meta['description']}. "
+                f"Not every chart has a clear signal. Recognizing when to wait is just as valuable "
+                f"as knowing when to buy or sell."
+            ),
+            "disclaimer": "This is for educational purposes only. Past patterns do not guarantee future results.",
+        }
+
 
 def build_level2_scenarios(
     all_data: dict[str, pd.DataFrame],
     difficulty: str,
 ) -> list[dict]:
-    """Build Level 2 scenarios from real data."""
+    """Build Level 2 scenarios: single chart, single indicator, Buy/Sell/Wait."""
+    thresholds = THRESHOLDS[difficulty]
+
+    # Collect windows per (indicator, answer) combo
+    candidates: dict[tuple[str, str], list[tuple[str, pd.DataFrame]]] = {}
+    indicator_types = ["rsi", "bollinger", "macd", "ma_crossover", "stochastic"]
+
+    for ind_type in indicator_types:
+        for answer, detector_map in [("buy", BUY_DETECTORS), ("sell", SELL_DETECTORS), ("wait", NEUTRAL_DETECTORS)]:
+            key = (ind_type, answer)
+            candidates[key] = []
+            detector = detector_map[ind_type]
+            for symbol, df in all_data.items():
+                hits = detector(df, thresholds)
+                for idx in hits:
+                    if len(candidates[key]) >= 8:
+                        break
+                    window = extract_window(df, idx)
+                    if window is not None and len(window) >= WINDOW_SIZE:
+                        candidates[key].append((symbol, window))
+                if len(candidates[key]) >= 8:
+                    break
+
+    # Build scenarios using rotation arrays
     scenarios = []
-    scenario_id = 0
+    used = 0
+    for i in range(20):
+        answer = L2_ANSWER_ROTATION[i % len(L2_ANSWER_ROTATION)]
+        ind_type = L2_INDICATOR_ROTATION[i % len(L2_INDICATOR_ROTATION)]
 
-    fakeout_windows = []
-    breakout_windows = []
+        key = (ind_type, answer)
+        pool = candidates.get(key, [])
+        if not pool:
+            # Fallback: try same answer with any indicator
+            for fallback_ind in indicator_types:
+                fallback_key = (fallback_ind, answer)
+                if candidates.get(fallback_key):
+                    pool = candidates[fallback_key]
+                    ind_type = fallback_ind
+                    key = fallback_key
+                    break
+        if not pool:
+            continue
 
-    for symbol, df in all_data.items():
-        fakeout_hits = detect_macd_fakeout(df)
-        for idx in fakeout_hits:
-            window = extract_window(df, idx)
-            if window is not None and len(window) >= WINDOW_SIZE:
-                fakeout_windows.append((symbol, window))
-
-        breakout_hits = detect_macd_breakout(df)
-        for idx in breakout_hits:
-            window = extract_window(df, idx)
-            if window is not None and len(window) >= WINDOW_SIZE:
-                breakout_windows.append((symbol, window))
-
-    random.shuffle(fakeout_windows)
-    random.shuffle(breakout_windows)
-
-    # Pair up fakeouts with breakouts
-    pairs = min(len(fakeout_windows), len(breakout_windows), 20)
-    for i in range(pairs):
-        fake_sym, fake_window = fakeout_windows[i]
-        break_sym, break_window = breakout_windows[i]
-
-        breakout_on_a = random.random() > 0.5
-        stock_label = f"{break_sym}" if breakout_on_a else f"{fake_sym}"
-
-        fake_candles = window_to_candles(fake_window)
-        fake_macd = build_macd_indicator(fake_window)
-        break_candles = window_to_candles(break_window)
-        break_macd = build_macd_indicator(break_window)
-
-        # Assign timeframes
-        fakeout_is_daily = difficulty != "hard" or random.random() > 0.5
-        daily_tf = "Daily" if fakeout_is_daily else "Weekly"
-        weekly_tf = "Weekly" if fakeout_is_daily else "Daily"
+        sym, window = pool.pop(0)
+        candles = window_to_candles(window)
+        indicator_data = INDICATOR_BUILDERS[ind_type](window)
+        meta = INDICATOR_META[ind_type]
 
         scenario = {
-            "id": f"l2-{difficulty}-{scenario_id}",
+            "id": f"l2-{difficulty}-{used}",
             "level": 2,
             "difficulty": difficulty,
-            "question": "Which chart shows a more reliable buy signal — and which might be a trap?",
-            "stockLabel": stock_label,
-            "chartA": {
-                "candles": break_candles if breakout_on_a else fake_candles,
-                "indicator": break_macd if breakout_on_a else fake_macd,
-                "label": f"Chart A — {weekly_tf if breakout_on_a else daily_tf} View",
-                "timeframe": weekly_tf.lower() if breakout_on_a else daily_tf.lower(),
+            "question": f"What is the {meta['friendlyName']} telling you?",
+            "chart": {
+                "candles": candles,
+                "indicator": indicator_data,
+                "label": f"{meta['friendlyName']} ({meta['technicalName']})",
             },
-            "chartB": {
-                "candles": fake_candles if breakout_on_a else break_candles,
-                "indicator": fake_macd if breakout_on_a else break_macd,
-                "label": f"Chart B — {daily_tf if breakout_on_a else weekly_tf} View",
-                "timeframe": daily_tf.lower() if breakout_on_a else weekly_tf.lower(),
-            },
-            "correctAnswer": "A" if breakout_on_a else "B",
-            "explanation": {
-                "headline": f"Chart {'A' if breakout_on_a else 'B'} shows the more reliable signal",
-                "detail": (
-                    f"The {'daily' if fakeout_is_daily else 'weekly'} chart's Trend Momentum crossed "
-                    f"briefly but quickly faded — a classic fakeout. The "
-                    f"{'weekly' if fakeout_is_daily else 'daily'} chart shows sustained momentum "
-                    f"with growing bars, suggesting a more genuine shift."
-                ),
-                "lesson": (
-                    "When a short-term chart says \"go\" but the bigger picture disagrees, "
-                    "the bigger picture usually wins. Always check multiple timeframes before acting on a signal."
-                ),
-                "disclaimer": "This is for educational purposes only. Past patterns do not guarantee future results.",
-            },
+            "options": [
+                {"id": "buy", "label": "Buy", "description": "The indicator suggests a potential buying opportunity"},
+                {"id": "wait", "label": "Wait", "description": "No clear signal — best to wait"},
+                {"id": "sell", "label": "Sell", "description": "The indicator suggests a potential selling opportunity"},
+            ],
+            "correctAnswer": answer,
+            "explanation": _build_level2_explanation(ind_type, answer),
         }
         scenarios.append(scenario)
-        scenario_id += 1
+        used += 1
 
     random.shuffle(scenarios)
     for i, s in enumerate(scenarios):
         s["id"] = f"l2-{difficulty}-{i}"
+
+    print(f"  Level 2 ({difficulty}): {len(scenarios)} scenarios")
     return scenarios
 
 
 # ============================================================
 # Level 3: Confluence
 # ============================================================
+
+def _build_level3_explanation(answer: str, window: pd.DataFrame) -> dict:
+    """Build detailed Level 3 explanation with specific visual cues from actual data."""
+    rsi = window["rsi"]
+    hist = window["macd_histogram"]
+    macd_line = window["macd_line"]
+    macd_signal = window["macd_signal"]
+
+    # Extract last valid RSI
+    last_rsi = 50
+    for i in range(len(window) - 1, -1, -1):
+        if pd.notna(rsi.iloc[i]):
+            last_rsi = round(float(rsi.iloc[i]))
+            break
+
+    # Extract last valid histogram value and recent trend
+    last_hist = 0.0
+    for i in range(len(window) - 1, -1, -1):
+        if pd.notna(hist.iloc[i]):
+            last_hist = float(hist.iloc[i])
+            break
+
+    recent_hists = []
+    for i in range(max(0, len(window) - 5), len(window)):
+        if pd.notna(hist.iloc[i]):
+            recent_hists.append(float(hist.iloc[i]))
+    hist_growing = len(recent_hists) >= 2 and abs(recent_hists[-1]) > abs(recent_hists[0])
+
+    # MACD line above/below signal
+    macd_above = False
+    for i in range(len(window) - 1, -1, -1):
+        if pd.notna(macd_line.iloc[i]) and pd.notna(macd_signal.iloc[i]):
+            macd_above = float(macd_line.iloc[i]) > float(macd_signal.iloc[i])
+            break
+
+    # RSI description
+    if last_rsi < 30:
+        rsi_visual = f"the blue line has dropped below the lower red dashed line (30 level) to around {last_rsi}"
+        rsi_meaning = "sellers may have pushed the price too low — historically, this can signal a potential bounce"
+        rsi_zone = "oversold"
+    elif last_rsi > 70:
+        rsi_visual = f"the blue line has climbed above the upper red dashed line (70 level) to around {last_rsi}"
+        rsi_meaning = "buyers may have pushed the price too high — historically, this can signal a potential pullback"
+        rsi_zone = "overbought"
+    else:
+        rsi_visual = f"the blue line is at around {last_rsi}, sitting between the two dashed lines (30 and 70)"
+        rsi_meaning = "there's no extreme reading — the price isn't stretched in either direction"
+        rsi_zone = "neutral"
+
+    # MACD description
+    if last_hist > 0:
+        macd_visual = "the histogram bars are green (above the zero line)"
+        if hist_growing:
+            macd_visual += " and getting taller — upward momentum is building"
+        else:
+            macd_visual += " but starting to shrink — upward momentum may be fading"
+    elif last_hist < 0:
+        macd_visual = "the histogram bars are red (below the zero line)"
+        if hist_growing:
+            macd_visual += " and getting deeper — downward momentum is building"
+        else:
+            macd_visual += " but starting to shrink — downward momentum may be fading"
+    else:
+        macd_visual = "the histogram bars are near zero — momentum is flat"
+
+    if answer == "buy":
+        return {
+            "headline": "Both indicators agree — this is a potential buying opportunity",
+            "rsiReason": (
+                f"Look at the Momentum Meter (RSI) panel: {rsi_visual}. "
+                f"This means {rsi_meaning}."
+            ),
+            "macdReason": (
+                f"Now check the Trend Momentum (MACD) panel at the bottom: {macd_visual}. "
+                f"The blue MACD line is {'above' if macd_above else 'crossing above'} the orange signal line, "
+                f"confirming upward momentum is building."
+            ),
+            "confluenceReason": (
+                f"Both indicators point the same way: RSI shows the price is in the {rsi_zone} zone "
+                f"(potential bounce), and MACD confirms momentum is turning upward. "
+                f"When two indicators agree, it's called \"confluence\" — like getting a second opinion "
+                f"that confirms the first. This makes the buy signal more reliable than either indicator alone."
+            ),
+            "disclaimer": "This is for educational purposes only. Past patterns do not guarantee future results.",
+        }
+    elif answer == "sell":
+        return {
+            "headline": "Both indicators agree — this is a potential selling opportunity",
+            "rsiReason": (
+                f"Look at the Momentum Meter (RSI) panel: {rsi_visual}. "
+                f"This means {rsi_meaning}."
+            ),
+            "macdReason": (
+                f"Now check the Trend Momentum (MACD) panel at the bottom: {macd_visual}. "
+                f"The blue MACD line is {'below' if not macd_above else 'crossing below'} the orange signal line, "
+                f"confirming downward momentum."
+            ),
+            "confluenceReason": (
+                f"Both indicators point the same way: RSI shows the price is in the {rsi_zone} zone "
+                f"(potential pullback), and MACD confirms momentum is turning downward. "
+                f"This is confluence — two independent signals agreeing makes the sell signal stronger. "
+                f"A common mistake is looking at just one indicator. Always check if both panels tell the same story."
+            ),
+            "disclaimer": "This is for educational purposes only. Past patterns do not guarantee future results.",
+        }
+    else:  # wait
+        # Describe the specific disagreement
+        if last_rsi < 30 and last_hist < 0:
+            disagreement = (
+                f"The RSI is in the oversold zone at {last_rsi}, which might tempt you to buy. "
+                f"But look at the MACD — the histogram bars are red and pointing downward, meaning "
+                f"momentum is still falling. RSI says 'the price looks cheap,' but MACD says 'it's still dropping.' "
+                f"That's a mixed signal."
+            )
+        elif last_rsi > 70 and last_hist > 0:
+            disagreement = (
+                f"The RSI is in the overbought zone at {last_rsi}, which might tempt you to sell. "
+                f"But look at the MACD — the histogram bars are green and pointing upward, meaning "
+                f"momentum is still rising. RSI says 'the price looks stretched,' but MACD says 'it's still climbing.' "
+                f"That's a mixed signal."
+            )
+        else:
+            disagreement = (
+                f"The RSI is at {last_rsi} ({rsi_zone} zone) while the MACD histogram shows "
+                f"{'upward' if last_hist > 0 else 'downward'} momentum. "
+                f"These two indicators are telling different stories."
+            )
+        return {
+            "headline": "The indicators disagree — best to wait for confirmation",
+            "rsiReason": (
+                f"Look at the Momentum Meter (RSI) panel: {rsi_visual}. "
+                f"This means {rsi_meaning}."
+            ),
+            "macdReason": (
+                f"Now check the Trend Momentum (MACD) panel at the bottom: {macd_visual}."
+            ),
+            "confluenceReason": (
+                f"{disagreement} "
+                f"When indicators disagree, acting on just one while ignoring the other is a common mistake. "
+                f"The safest move is to wait until both panels tell the same story before making a decision."
+            ),
+            "disclaimer": "This is for educational purposes only. Past patterns do not guarantee future results.",
+        }
+
 
 def build_level3_scenarios(
     all_data: dict[str, pd.DataFrame],
@@ -384,64 +629,7 @@ def build_level3_scenarios(
             rsi_data = build_rsi_indicator(window)
             macd_data = build_macd_indicator(window)
 
-            # Get last RSI value for explanation
-            rsi_vals = [v["value"] for v in rsi_data["values"]]
-            last_rsi = rsi_vals[-1] if rsi_vals else 50
-
-            if answer == "buy":
-                explanation = {
-                    "headline": "Both indicators suggest a potential buying opportunity",
-                    "rsiReason": (
-                        f"The Momentum Meter dropped to around {round(last_rsi)}, "
-                        f"which is in the oversold zone. Historically, this suggests "
-                        f"sellers may have pushed the price too low."
-                    ),
-                    "macdReason": (
-                        "The Trend Momentum histogram is turning positive, "
-                        "showing momentum may be shifting upward."
-                    ),
-                    "confluenceReason": (
-                        'When two different indicators flash the same signal, it\'s called '
-                        '"confluence." It\'s like getting a second opinion — when both agree, '
-                        "you can have more confidence in the signal."
-                    ),
-                    "disclaimer": "This is for educational purposes only. Past patterns do not guarantee future results.",
-                }
-            elif answer == "sell":
-                explanation = {
-                    "headline": "Both indicators suggest a potential selling opportunity",
-                    "rsiReason": (
-                        f"The Momentum Meter climbed to around {round(last_rsi)}, "
-                        f"which is in the overbought zone. Historically, this suggests "
-                        f"buyers may have pushed the price too high."
-                    ),
-                    "macdReason": (
-                        "The Trend Momentum histogram is turning negative, "
-                        "showing momentum may be shifting downward."
-                    ),
-                    "confluenceReason": (
-                        "Both indicators are flashing the same warning — the price may have "
-                        "gotten ahead of itself. When they agree, the signal carries more weight."
-                    ),
-                    "disclaimer": "This is for educational purposes only. Past patterns do not guarantee future results.",
-                }
-            else:  # wait
-                explanation = {
-                    "headline": "The indicators disagree — best to wait for confirmation",
-                    "rsiReason": (
-                        "The Momentum Meter is sending one signal, but it's not "
-                        "extreme enough to be decisive on its own."
-                    ),
-                    "macdReason": (
-                        "The Trend Momentum is telling a different story, suggesting "
-                        "momentum hasn't fully committed to a direction."
-                    ),
-                    "confluenceReason": (
-                        "When indicators disagree, it's like two friends giving opposite advice. "
-                        "The safest move is to wait until they start agreeing before making a decision."
-                    ),
-                    "disclaimer": "This is for educational purposes only. Past patterns do not guarantee future results.",
-                }
+            explanation = _build_level3_explanation(answer, window)
 
             scenario = {
                 "id": f"l3-{difficulty}-{scenario_id}",

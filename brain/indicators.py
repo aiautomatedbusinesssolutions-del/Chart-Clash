@@ -170,6 +170,57 @@ def detect_stochastic_neutral(df: pd.DataFrame) -> list[int]:
     return hits
 
 
+def detect_bollinger_sell(df: pd.DataFrame, touch_pct: float) -> list[int]:
+    """Find indices where price touches or rises above upper Bollinger Band."""
+    hits = []
+    for i in range(len(df)):
+        if pd.notna(df["bb_upper"].iloc[i]):
+            upper = df["bb_upper"].iloc[i]
+            close = df["close"].iloc[i]
+            if close >= upper * (1 - touch_pct):
+                hits.append(i)
+    return hits
+
+
+def detect_macd_sell(df: pd.DataFrame) -> list[int]:
+    """Find indices where MACD crosses below signal line (bearish crossover)."""
+    hits = []
+    macd = df["macd_line"]
+    signal = df["macd_signal"]
+    for i in range(1, len(df)):
+        if (pd.notna(macd.iloc[i]) and pd.notna(signal.iloc[i]) and
+            pd.notna(macd.iloc[i-1]) and pd.notna(signal.iloc[i-1])):
+            if macd.iloc[i-1] >= signal.iloc[i-1] and macd.iloc[i] < signal.iloc[i]:
+                hits.append(i)
+    return hits
+
+
+def detect_ma_crossover_sell(df: pd.DataFrame) -> list[int]:
+    """Find indices where SMA 20 crosses below SMA 50 (death cross)."""
+    hits = []
+    short = df["sma_20"]
+    long = df["sma_50"]
+    for i in range(1, len(df)):
+        if (pd.notna(short.iloc[i]) and pd.notna(long.iloc[i]) and
+            pd.notna(short.iloc[i-1]) and pd.notna(long.iloc[i-1])):
+            if short.iloc[i-1] >= long.iloc[i-1] and short.iloc[i] < long.iloc[i]:
+                hits.append(i)
+    return hits
+
+
+def detect_stochastic_sell(df: pd.DataFrame, threshold: float) -> list[int]:
+    """Find indices where Stochastic %K crosses below %D in overbought zone."""
+    hits = []
+    k = df["stoch_k"]
+    d = df["stoch_d"]
+    for i in range(1, len(df)):
+        if (pd.notna(k.iloc[i]) and pd.notna(d.iloc[i]) and
+            pd.notna(k.iloc[i-1]) and pd.notna(d.iloc[i-1])):
+            if k.iloc[i] > threshold and k.iloc[i-1] >= d.iloc[i-1] and k.iloc[i] < d.iloc[i]:
+                hits.append(i)
+    return hits
+
+
 def detect_macd_fakeout(df: pd.DataFrame) -> list[int]:
     """Find indices where MACD crosses up then reverses back within 10 bars."""
     hits = []
@@ -215,25 +266,38 @@ def detect_macd_breakout(df: pd.DataFrame) -> list[int]:
 
 
 def detect_confluence_buy(df: pd.DataFrame, rsi_threshold: float) -> list[int]:
-    """Find indices where both RSI is oversold AND MACD histogram is turning positive."""
+    """Find indices where RSI was recently oversold AND MACD histogram is positive/rising."""
     hits = []
     rsi = df["rsi"]
     hist = df["macd_histogram"]
-    for i in range(1, len(df)):
-        if (pd.notna(rsi.iloc[i]) and pd.notna(hist.iloc[i]) and pd.notna(hist.iloc[i-1])):
-            if rsi.iloc[i] < rsi_threshold and hist.iloc[i] > 0 and hist.iloc[i-1] <= 0:
+    lookback = 5  # RSI was oversold within last 5 bars
+    for i in range(lookback, len(df)):
+        if pd.notna(hist.iloc[i]) and hist.iloc[i] > 0:
+            # Check if RSI was below threshold recently
+            rsi_oversold = False
+            for j in range(max(0, i - lookback), i + 1):
+                if pd.notna(rsi.iloc[j]) and rsi.iloc[j] < rsi_threshold:
+                    rsi_oversold = True
+                    break
+            if rsi_oversold:
                 hits.append(i)
     return hits
 
 
 def detect_confluence_sell(df: pd.DataFrame, rsi_threshold: float) -> list[int]:
-    """Find indices where both RSI is overbought AND MACD histogram is turning negative."""
+    """Find indices where RSI was recently overbought AND MACD histogram is negative/falling."""
     hits = []
     rsi = df["rsi"]
     hist = df["macd_histogram"]
-    for i in range(1, len(df)):
-        if (pd.notna(rsi.iloc[i]) and pd.notna(hist.iloc[i]) and pd.notna(hist.iloc[i-1])):
-            if rsi.iloc[i] > rsi_threshold and hist.iloc[i] < 0 and hist.iloc[i-1] >= 0:
+    lookback = 5
+    for i in range(lookback, len(df)):
+        if pd.notna(hist.iloc[i]) and hist.iloc[i] < 0:
+            rsi_overbought = False
+            for j in range(max(0, i - lookback), i + 1):
+                if pd.notna(rsi.iloc[j]) and rsi.iloc[j] > rsi_threshold:
+                    rsi_overbought = True
+                    break
+            if rsi_overbought:
                 hits.append(i)
     return hits
 

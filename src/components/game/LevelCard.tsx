@@ -23,10 +23,10 @@ const LEVEL_INFO: Record<
       "Two charts, two indicators — tap the one showing a potential buy signal.",
   },
   2: {
-    title: "Fakeout vs Breakout",
-    subtitle: "Spot the trap",
+    title: "Read the Signal",
+    subtitle: "Interpret the indicator",
     description:
-      "Same stock, two timeframes — find the real signal and avoid the fakeout.",
+      "One chart, one indicator — is it telling you to Buy, Sell, or Wait?",
   },
   3: {
     title: "Confluence",

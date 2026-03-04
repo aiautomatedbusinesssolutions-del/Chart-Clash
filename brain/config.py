@@ -69,6 +69,8 @@ INDICATOR_META = {
         "technicalName": "RSI",
         "description": "Measures how fast the price is rising or falling on a scale of 0-100",
         "buyDescription": "has dropped into the oversold zone, suggesting sellers may have pushed the price too low",
+        "sellDescription": "has climbed above 70, which historically suggests the stock may be overbought and could pull back",
+        "waitDescription": "is sitting in the middle of its range, not extreme in either direction — no clear signal yet",
         "neutralDescription": "is sitting in the middle zone, suggesting no strong directional pressure",
     },
     "bollinger": {
@@ -76,6 +78,8 @@ INDICATOR_META = {
         "technicalName": "Bollinger Bands",
         "description": "Shows a normal price range — when price breaks out of the bands, it may be stretched too far",
         "buyDescription": "shows price touching the lower band, which historically suggests it may bounce back up",
+        "sellDescription": "shows price touching the upper band, historically suggesting it may be stretched too high and could pull back",
+        "waitDescription": "shows price moving near the middle of the bands — it's not stretched in either direction yet",
         "neutralDescription": "shows price moving within the bands without touching either extreme",
     },
     "macd": {
@@ -83,6 +87,8 @@ INDICATOR_META = {
         "technicalName": "MACD",
         "description": "Compares fast and slow moving averages to show momentum direction",
         "buyDescription": "shows the fast line crossing above the slow line with growing momentum bars",
+        "sellDescription": "shows the fast line crossing below the slow line, suggesting a potential shift downward",
+        "waitDescription": "shows the lines tangled together with small histogram bars — momentum is unclear",
         "neutralDescription": "shows the lines tangled together with no clear direction",
     },
     "ma_crossover": {
@@ -90,6 +96,8 @@ INDICATOR_META = {
         "technicalName": "Moving Average Crossover",
         "description": "Compares a short-term and long-term average to show trend direction",
         "buyDescription": "shows the short-term average crossing above the long-term average, suggesting an uptrend may be starting",
+        "sellDescription": "shows the short-term average crossing below the long-term average, suggesting a downtrend may be starting",
+        "waitDescription": "shows both averages running close together without crossing — no clear trend change",
         "neutralDescription": "shows both averages moving roughly parallel, suggesting no trend change",
     },
     "stochastic": {
@@ -97,6 +105,8 @@ INDICATOR_META = {
         "technicalName": "Stochastic Oscillator",
         "description": "Shows where the price closed relative to its recent range",
         "buyDescription": "has dropped into the oversold zone with %K crossing above %D, suggesting a potential bounce",
+        "sellDescription": "has climbed above 80, historically suggesting that buying pressure may be easing and a pullback is possible",
+        "waitDescription": "is in the middle of its range — neither overbought nor oversold, so no strong signal",
         "neutralDescription": "is in the middle zone, suggesting balanced buying and selling pressure",
     },
 }

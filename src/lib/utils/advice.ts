@@ -2,13 +2,13 @@ import type { LevelResult, LevelNumber, PersonalizedAdvice } from "@/lib/types";
 
 const LEVEL_STRENGTHS: Record<LevelNumber, string> = {
   1: "Recognizing individual indicator signals",
-  2: "Filtering fakeouts from real breakouts",
+  2: "Reading what individual indicators are telling you",
   3: "Reading confluence between multiple indicators",
 };
 
 const LEVEL_WEAKNESSES: Record<LevelNumber, string> = {
   1: "Identifying buy conditions from indicators",
-  2: "Distinguishing fakeouts from real signals across timeframes",
+  2: "Interpreting what a single indicator is telling you (buy, sell, or wait)",
   3: "Combining RSI and MACD to make a decision",
 };
 
@@ -19,9 +19,9 @@ const LEVEL_TIPS: Record<LevelNumber, string[]> = {
     "Look at the MACD histogram direction — rising bars suggest building momentum.",
   ],
   2: [
-    "Always check the bigger timeframe first — a weekly signal often overrides a daily one.",
-    "Fakeouts typically show brief crossovers that quickly reverse. Real signals show sustained momentum.",
-    "Volume and histogram bar size can help distinguish weak from strong signals.",
+    "Each indicator has clear zones: RSI below 30 = buy, above 70 = sell. Practice spotting these thresholds.",
+    "When an indicator is in the middle of its range, it often means 'wait' — no clear signal yet.",
+    "Try connecting what you learned here to Level 3, where two indicators work together.",
   ],
   3: [
     "Confluence means agreement — when both RSI and MACD say the same thing, the signal is stronger.",
