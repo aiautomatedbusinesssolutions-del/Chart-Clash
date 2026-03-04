@@ -13,6 +13,7 @@ import { loadGameScenarios } from "@/lib/services/scenario-loader";
 
 interface GameState {
   phase: GamePhase;
+  loading: boolean;
   levelStatuses: Record<LevelNumber, LevelStatus>;
   currentLevel: LevelNumber | null;
   currentDifficulty: Difficulty;
@@ -25,7 +26,7 @@ interface GameState {
 }
 
 interface GameActions {
-  startLevel: (level: LevelNumber, difficulty: Difficulty) => void;
+  startLevel: (level: LevelNumber, difficulty: Difficulty) => Promise<void>;
   submitAnswer: (answer: string) => void;
   nextRound: () => void;
   goHome: () => void;
@@ -37,6 +38,7 @@ interface GameActions {
 
 const initialState: GameState = {
   phase: "home",
+  loading: false,
   levelStatuses: { 1: "unlocked", 2: "locked", 3: "locked" },
   currentLevel: null,
   currentDifficulty: "easy",
@@ -51,12 +53,12 @@ const initialState: GameState = {
 export const useGameStore = create<GameState & GameActions>()((set, get) => ({
   ...initialState,
 
-  startLevel: (level, difficulty) => {
-    const scenarios = loadGameScenarios(level, difficulty);
+  startLevel: async (level, difficulty) => {
+    set({ loading: true, currentLevel: level, currentDifficulty: difficulty });
+    const scenarios = await loadGameScenarios(level, difficulty);
     set({
       phase: "playing",
-      currentLevel: level,
-      currentDifficulty: difficulty,
+      loading: false,
       currentRound: 1,
       scenarios,
       results: [],
@@ -136,6 +138,7 @@ export const useGameStore = create<GameState & GameActions>()((set, get) => ({
     const { levelStatuses, levelResults } = get();
     set({
       phase: "home",
+      loading: false,
       currentLevel: null,
       currentRound: 1,
       scenarios: [],

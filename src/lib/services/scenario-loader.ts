@@ -9,6 +9,15 @@ import {
 const POOL_SIZE = 12;
 const GAME_SIZE = 10;
 
+function shuffle<T>(arr: T[]): T[] {
+  const shuffled = [...arr];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
 function generatePool(
   level: LevelNumber,
   difficulty: Difficulty
@@ -34,18 +43,26 @@ function generatePool(
   return scenarios;
 }
 
-export function loadGameScenarios(
+async function fetchRealScenarios(
   level: LevelNumber,
   difficulty: Difficulty
-): GameScenario[] {
-  const pool = generatePool(level, difficulty);
-
-  // Shuffle using Fisher-Yates
-  const shuffled = [...pool];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+): Promise<GameScenario[] | null> {
+  try {
+    const resp = await fetch(`/scenarios/level${level}/${difficulty}.json`);
+    if (!resp.ok) return null;
+    const data: GameScenario[] = await resp.json();
+    return data.length >= GAME_SIZE ? data : null;
+  } catch {
+    return null;
   }
+}
 
-  return shuffled.slice(0, GAME_SIZE);
+export async function loadGameScenarios(
+  level: LevelNumber,
+  difficulty: Difficulty
+): Promise<GameScenario[]> {
+  // Try real data first, fall back to procedural generation
+  const realScenarios = await fetchRealScenarios(level, difficulty);
+  const pool = realScenarios ?? generatePool(level, difficulty);
+  return shuffle(pool).slice(0, GAME_SIZE);
 }

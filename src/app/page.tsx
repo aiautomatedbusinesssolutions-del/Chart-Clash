@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, Loader2 } from "lucide-react";
 import { LevelCard } from "@/components/game/LevelCard";
 import { DifficultySelector } from "@/components/game/DifficultySelector";
 import { useGameStore } from "@/lib/store/game-store";
@@ -10,17 +10,17 @@ import type { Difficulty, LevelNumber } from "@/lib/types";
 
 export default function Home() {
   const router = useRouter();
-  const { levelStatuses, levelResults, startLevel } = useGameStore();
+  const { levelStatuses, levelResults, startLevel, loading } = useGameStore();
   const [selectedLevel, setSelectedLevel] = useState<LevelNumber | null>(null);
 
   const handleLevelSelect = (level: LevelNumber) => {
     setSelectedLevel(level);
   };
 
-  const handleDifficultySelect = (difficulty: Difficulty) => {
+  const handleDifficultySelect = async (difficulty: Difficulty) => {
     if (selectedLevel) {
-      startLevel(selectedLevel, difficulty);
       setSelectedLevel(null);
+      await startLevel(selectedLevel, difficulty);
       router.push("/play");
     }
   };
@@ -66,6 +66,16 @@ export default function Home() {
           onSelect={handleDifficultySelect}
           onCancel={() => setSelectedLevel(null)}
         />
+      )}
+
+      {/* Loading overlay */}
+      {loading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="w-8 h-8 text-sky-400 animate-spin" />
+            <p className="text-sm text-slate-400">Loading charts...</p>
+          </div>
+        </div>
       )}
     </main>
   );
