@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { BarChart3 } from "lucide-react";
 import { LevelCard } from "@/components/game/LevelCard";
 import { DifficultySelector } from "@/components/game/DifficultySelector";
@@ -8,6 +9,7 @@ import { useGameStore } from "@/lib/store/game-store";
 import type { Difficulty, LevelNumber } from "@/lib/types";
 
 export default function Home() {
+  const router = useRouter();
   const { levelStatuses, levelResults, startLevel } = useGameStore();
   const [selectedLevel, setSelectedLevel] = useState<LevelNumber | null>(null);
 
@@ -19,6 +21,7 @@ export default function Home() {
     if (selectedLevel) {
       startLevel(selectedLevel, difficulty);
       setSelectedLevel(null);
+      router.push("/play");
     }
   };
 

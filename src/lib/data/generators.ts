@@ -496,8 +496,8 @@ function buildLevel1Explanation(
 
   return {
     headline: `Chart ${chart} is showing a potential buy condition`,
-    detail: `The ${buyMeta.friendlyName} on Chart ${chart} ${buyMeta.buyDescription}. Meanwhile, Chart ${other}'s ${neutralMeta.friendlyName} ${neutralMeta.neutralDescription}.`,
-    lesson: `${buyMeta.friendlyName}: ${buyMeta.description}. When it reaches extreme levels, it can historically signal a potential opportunity — but always look for confirmation from other indicators.`,
+    detail: `The ${buyMeta.friendlyName} (${buyMeta.technicalName}) on Chart ${chart} ${buyMeta.buyDescription}. Meanwhile, Chart ${other}'s ${neutralMeta.friendlyName} (${neutralMeta.technicalName}) ${neutralMeta.neutralDescription}.`,
+    lesson: `${buyMeta.friendlyName} (${buyMeta.technicalName}): ${buyMeta.description}. When it reaches extreme levels, it can historically signal a potential opportunity — but always look for confirmation from other indicators.`,
     disclaimer:
       "This is for educational purposes only. Past patterns do not guarantee future results.",
   };
@@ -532,8 +532,10 @@ export function generateLevel1Scenario(
   );
 
   const buyOnA = rng() > 0.5;
-  const buyName = INDICATOR_META[buyIndicator].friendlyName;
-  const neutralName = INDICATOR_META[neutralIndicator].friendlyName;
+  const buyMeta = INDICATOR_META[buyIndicator];
+  const neutralMeta = INDICATOR_META[neutralIndicator];
+  const buyLabel = `${buyMeta.friendlyName} (${buyMeta.technicalName})`;
+  const neutralLabel = `${neutralMeta.friendlyName} (${neutralMeta.technicalName})`;
 
   return {
     id: `l1-${difficulty}-${index}`,
@@ -543,12 +545,12 @@ export function generateLevel1Scenario(
     chartA: {
       candles: buyOnA ? buyCandles : neutralCandles,
       indicator: buyOnA ? buyIndicatorData : neutralIndicatorData,
-      label: `Chart A — ${buyOnA ? buyName : neutralName}`,
+      label: `Chart A — ${buyOnA ? buyLabel : neutralLabel}`,
     },
     chartB: {
       candles: buyOnA ? neutralCandles : buyCandles,
       indicator: buyOnA ? neutralIndicatorData : buyIndicatorData,
-      label: `Chart B — ${buyOnA ? neutralName : buyName}`,
+      label: `Chart B — ${buyOnA ? neutralLabel : buyLabel}`,
     },
     correctAnswer: buyOnA ? "A" : "B",
     explanation: buildLevel1Explanation(

@@ -2,6 +2,7 @@ import type { IndicatorType } from "@/lib/types";
 
 export interface IndicatorMeta {
   friendlyName: string;
+  technicalName: string;
   description: string;
   buyDescription: string;
   neutralDescription: string;
@@ -12,6 +13,7 @@ export interface IndicatorMeta {
 export const INDICATOR_META: Record<IndicatorType, IndicatorMeta> = {
   rsi: {
     friendlyName: "Momentum Meter",
+    technicalName: "RSI",
     description: "Measures how fast a stock is moving up or down",
     buyDescription:
       "dropped below 30, which historically suggests the stock may be oversold — like a rubber band stretched too far down",
@@ -21,6 +23,7 @@ export const INDICATOR_META: Record<IndicatorType, IndicatorMeta> = {
   },
   bollinger: {
     friendlyName: "Price Squeeze Bands",
+    technicalName: "Bollinger Bands",
     description:
       "Shows if a stock price is stretched too far from its average",
     buyDescription:
@@ -32,6 +35,7 @@ export const INDICATOR_META: Record<IndicatorType, IndicatorMeta> = {
   },
   macd: {
     friendlyName: "Trend Momentum",
+    technicalName: "MACD",
     description:
       "Shows if a stock's momentum is shifting direction — like watching which way the wind is blowing",
     buyDescription:
@@ -43,6 +47,7 @@ export const INDICATOR_META: Record<IndicatorType, IndicatorMeta> = {
   },
   ma_crossover: {
     friendlyName: "Average Crossover",
+    technicalName: "Moving Average Crossover",
     description:
       "Compares short-term and long-term price trends — like a speedboat vs. a cargo ship",
     buyDescription:
@@ -54,6 +59,7 @@ export const INDICATOR_META: Record<IndicatorType, IndicatorMeta> = {
   },
   stochastic: {
     friendlyName: "Speed Gauge",
+    technicalName: "Stochastic Oscillator",
     description:
       "Measures how close the price is to its recent highs or lows",
     buyDescription:

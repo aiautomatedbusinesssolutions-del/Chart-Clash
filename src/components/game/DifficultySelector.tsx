@@ -62,7 +62,7 @@ export function DifficultySelector({
           </div>
           <button
             onClick={onCancel}
-            className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+            className="p-3 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer min-w-[48px] min-h-[48px] flex items-center justify-center"
           >
             <X className="w-5 h-5" />
           </button>
@@ -90,7 +90,7 @@ export function DifficultySelector({
         {/* Cancel */}
         <Button
           variant="ghost"
-          size="sm"
+          size="lg"
           onClick={onCancel}
           className="w-full"
         >
