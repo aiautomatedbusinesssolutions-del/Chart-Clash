@@ -221,50 +221,6 @@ def detect_stochastic_sell(df: pd.DataFrame, threshold: float) -> list[int]:
     return hits
 
 
-def detect_macd_fakeout(df: pd.DataFrame) -> list[int]:
-    """Find indices where MACD crosses up then reverses back within 10 bars."""
-    hits = []
-    macd = df["macd_line"]
-    signal = df["macd_signal"]
-    for i in range(1, len(df) - 10):
-        if (pd.notna(macd.iloc[i]) and pd.notna(signal.iloc[i]) and
-            pd.notna(macd.iloc[i-1]) and pd.notna(signal.iloc[i-1])):
-            # Bullish crossover at i
-            if macd.iloc[i-1] <= signal.iloc[i-1] and macd.iloc[i] > signal.iloc[i]:
-                # Check if it reverses back within 10 bars
-                for j in range(i + 1, min(i + 11, len(df))):
-                    if pd.notna(macd.iloc[j]) and pd.notna(signal.iloc[j]):
-                        if macd.iloc[j] < signal.iloc[j]:
-                            hits.append(j)  # Use the reversal point
-                            break
-    return hits
-
-
-def detect_macd_breakout(df: pd.DataFrame) -> list[int]:
-    """Find indices where MACD crosses up and stays above for 10+ bars."""
-    hits = []
-    macd = df["macd_line"]
-    signal = df["macd_signal"]
-    for i in range(1, len(df) - 15):
-        if (pd.notna(macd.iloc[i]) and pd.notna(signal.iloc[i]) and
-            pd.notna(macd.iloc[i-1]) and pd.notna(signal.iloc[i-1])):
-            # Bullish crossover at i
-            if macd.iloc[i-1] <= signal.iloc[i-1] and macd.iloc[i] > signal.iloc[i]:
-                # Check it stays above for 10+ bars
-                sustained = True
-                for j in range(i + 1, min(i + 11, len(df))):
-                    if pd.notna(macd.iloc[j]) and pd.notna(signal.iloc[j]):
-                        if macd.iloc[j] <= signal.iloc[j]:
-                            sustained = False
-                            break
-                    else:
-                        sustained = False
-                        break
-                if sustained:
-                    hits.append(i + 10)  # Point after confirmation
-    return hits
-
-
 def detect_confluence_buy(df: pd.DataFrame, rsi_threshold: float) -> list[int]:
     """Find indices where RSI was recently oversold AND MACD histogram is positive/rising."""
     hits = []
